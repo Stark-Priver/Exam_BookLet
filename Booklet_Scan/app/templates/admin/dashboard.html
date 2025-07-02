@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>Admin Dashboard</h1>
+    <p>Welcome, {{ current_user.username }}!</p>
+    <p>This is the central place for managing the exam booklet system.</p>
+
+    <h2>Quick Links:</h2>
+    <div class="list-group">
+        <a href="{{ url_for('admin.list_students') }}" class="list-group-item list-group-item-action">Manage Students</a>
+        <a href="{{ url_for('admin.list_venues') }}" class="list-group-item list-group-item-action">Manage Venues</a>
+        <a href="{{ url_for('admin.list_exams') }}" class="list-group-item list-group-item-action">Manage Exams</a>
+        <a href="{{ url_for('admin.list_assignments') }}" class="list-group-item list-group-item-action">Manage Student-Exam Assignments</a>
+        <a href="#" class="list-group-item list-group-item-action disabled">View Scan Records (To be implemented)</a>
+    </div>
+
+    <p class="mt-4"><a href="{{ url_for('main.scan_ui') }}" class="btn btn-primary">Go to Scanning Interface</a></p>
+{% endblock %}
