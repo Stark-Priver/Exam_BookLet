@@ -1,14 +1,32 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, SubmitField, IntegerField, DateField, TimeField, SelectField
-from wtforms.validators import DataRequired, Optional, ValidationError
-from app.models import Venue # For Venue selection in ExamForm
+from wtforms.validators import DataRequired, Optional, ValidationError, Length
+from app.models import Venue, Course # For Venue selection in ExamForm and Course model
+
+# Form for Course
+class CourseForm(FlaskForm):
+    name = StringField('Course Name', validators=[DataRequired(), Length(max=128)])
+    code = StringField('Course Code (Optional)', validators=[Optional(), Length(max=20)])
+    submit = SubmitField('Save Course')
 
 # Form for Student
 class StudentForm(FlaskForm):
     name = StringField('Full Name', validators=[DataRequired()])
     student_id = StringField('Student ID', validators=[DataRequired()])
-    course = StringField('Course', validators=[DataRequired()])
+    # Course will be a SelectField, populated in routes
+    course = SelectField('Course', validators=[DataRequired(message="Please select a course.")])
     submit = SubmitField('Save Student')
+
+    def __init__(self, *args, **kwargs):
+        super(StudentForm, self).__init__(*args, **kwargs)
+        # Populate course choices dynamically. This will be overridden in the route
+        # to ensure fresh data, but good to have a default.
+        self.course.choices = [(c.name, c.name) for c in Course.query.order_by(Course.name).all()]
+        if not self.course.choices:
+            self.course.choices.insert(0, ('', 'No courses available - Add courses first'))
+        # else: # No need for "Select a course" here if DataRequired and no default choice value
+            # self.course.choices.insert(0, ('', '--- Select a Course ---'))
+
 
 # Form for Venue
 class VenueForm(FlaskForm):

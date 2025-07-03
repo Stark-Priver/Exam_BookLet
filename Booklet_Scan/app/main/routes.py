@@ -21,9 +21,17 @@ def index():
 def scan_ui():
     form = ScanForm()
 
+    # Check if exams are available and flash a message if not
+    if not form.exam_id.choices:
+        flash("No exams are currently available for scanning. Please add exams via the admin panel.", "warning")
+
     # Keep selected exam_id if form is re-rendered due to error or successful scan
     if request.method == 'GET' and request.args.get('last_exam_id'):
-        form.exam_id.data = int(request.args.get('last_exam_id'))
+        try:
+            # Ensure last_exam_id is a valid integer before assigning
+            form.exam_id.data = int(request.args.get('last_exam_id'))
+        except (ValueError, TypeError):
+            pass # Ignore if last_exam_id is not a valid int
 
     if form.validate_on_submit():
         exam_id = form.exam_id.data
