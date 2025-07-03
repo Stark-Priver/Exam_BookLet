@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>Welcome to the Exam Booklet Management System</h1>
+    <p>This system helps manage student authentication and exam booklet tracking.</p>
+    {% if not current_user.is_authenticated %}
+    <p>If you are an administrator, please <a href="{{ url_for('auth.login') }}">log in</a>.</p>
+    {% endif %}
+    <p>To start scanning, proceed to the <a href="{{ url_for('main.scan_ui') }}">Scanning Interface</a>.</p>
+{% endblock %}
