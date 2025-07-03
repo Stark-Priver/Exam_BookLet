@@ -45,7 +45,7 @@
           </li>
           {% else %}
             {# User is authenticated #}
-            {% if hasattr(current_user, 'username') %} {# Specifically an AdminUser #}
+            {% if current_user.is_authenticated and current_user.username %} {# Check if AdminUser and username exists #}
             <li class="nav-item">
               <a class="nav-link" href="{{ url_for('admin.dashboard') }}">Admin Dashboard</a>
             </li>
@@ -54,7 +54,7 @@
               <a class="nav-link" href="{{ url_for('main.scan_ui') }}">Scan Interface</a>
             </li>
             <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('auth.logout') }}">Logout ({{ current_user.username if hasattr(current_user, 'username') else 'User' }})</a>
+              <a class="nav-link" href="{{ url_for('auth.logout') }}">Logout ({{ current_user.username if current_user.is_authenticated and current_user.username else 'User' }})</a>
             </li>
           {% endif %}
         </ul>
