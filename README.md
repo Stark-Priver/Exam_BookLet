@@ -161,4 +161,93 @@ The system aims to improve efficiency and accuracy in tracking exam booklet subm
 *   **API Endpoints:** Develop API endpoints for programmatic interaction, e.g., bulk data import or integration with other institutional systems.
 *   **Comprehensive Testing:** Expand unit and integration tests to ensure reliability.
 *   **Configuration for Production:** Detail steps for deploying to a production environment (e.g., using Gunicorn/Waitress, different database).
+
+## Raspberry Pi Deployment with I2C LCD
+
+This application can be run on a Raspberry Pi with an I2C LCD display to show scan status.
+
+### Hardware Setup:
+
+1.  **I2C LCD Display:** A standard I2C LCD, typically 16x2 or 20x4 characters, often using a PCF8574 I2C backpack.
+2.  **Wiring:**
+    *   **SDA (Serial Data):** Connect to Raspberry Pi GPIO2 (Pin 3).
+    *   **SCL (Serial Clock):** Connect to Raspberry Pi GPIO3 (Pin 5).
+    *   **VCC:** Connect to Raspberry Pi 5V (Pin 2 or 4).
+    *   **GND:** Connect to Raspberry Pi Ground (Pin 6, 9, 14, 20, 25, 30, 34, or 39).
+    *   *Always double-check your Raspberry Pi pinout and LCD datasheet.*
+
+### Raspberry Pi Software Configuration:
+
+1.  **Operating System:**
+    *   Install Raspberry Pi OS (formerly Raspbian), either Lite (headless) or Desktop version. Flash it to an SD card.
+
+2.  **Initial Setup:**
+    *   Boot the Raspberry Pi and perform initial setup (locale, keyboard, network).
+    *   Ensure your Pi is connected to the internet.
+
+3.  **Enable I2C Interface:**
+    *   Open a terminal on the Raspberry Pi.
+    *   Run `sudo raspi-config`.
+    *   Navigate to `Interface Options` (or `Interfacing Options`).
+    *   Select `I2C` and enable it.
+    *   Reboot the Raspberry Pi if prompted.
+
+4.  **Install System Dependencies:**
+    *   Update package lists: `sudo apt update && sudo apt upgrade -y`
+    *   Install necessary tools and libraries:
+        ```bash
+        sudo apt install -y python3-dev python3-pip i2c-tools libffi-dev git
+        ```
+        *   `i2c-tools`: Allows you to detect I2C devices.
+        *   `libffi-dev`: May be needed for `cffi`, a dependency of `smbus-cffi`.
+
+5.  **Verify I2C Connection:**
+    *   With the LCD wired up and Pi powered on, run:
+        ```bash
+        sudo i2cdetect -y 1
+        ```
+        (Use `i2cdetect -y 0` if you have a very old Model B Rev 1 Pi).
+    *   You should see a grid. The address of your LCD (e.g., `27` or `3F`) should appear. Note this address. The default in `app/utils/lcd_display.py` is `0x27`. If yours is different, you might need to adjust the `DEFAULT_I2C_ADDRESS` in that file or modify the `init_lcd` call.
+
+### Application Setup on Raspberry Pi:
+
+1.  **Clone the Repository:**
+    ```bash
+    git clone <your_repository_url>
+    cd Booklet_Scan # Or your project's root directory
+    ```
+
+2.  **Create and Activate Virtual Environment:**
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate
+    ```
+
+3.  **Install Python Dependencies:**
+    ```bash
+    pip3 install -r requirements.txt
+    ```
+    This will install Flask, RPLCD, smbus-cffi, and other necessary packages.
+
+4.  **Database Setup:**
+    *   Follow the database initialization steps outlined in the main "Setup and Installation" section (using `flask shell` and `db.create_all()`).
+
+5.  **Run the Application for Network Access:**
+    *   To make the Flask app accessible from other devices on your network, run it on host `0.0.0.0`:
+        ```bash
+        python3 run.py
+        ```
+        (Ensure `run.py` is configured to run on `host='0.0.0.0'`, or use `flask run --host=0.0.0.0`).
+    *   The application will be available at `http://<RaspberryPi_IP_Address>:5000`. Find your Pi's IP address using `hostname -I`.
+
+### LCD Functionality:
+
+*   The `app/utils/lcd_display.py` module handles LCD interaction.
+*   It attempts to initialize the LCD when the scan page (`/scan`) is first accessed or when a message needs to be displayed.
+*   If the LCD is not detected or an error occurs, messages will be printed to the console/Flask log instead, and the web application will continue to function.
+*   The scan route (`app/main/routes.py`) will send status messages to the LCD:
+    *   "System Ready" on initialization.
+    *   "Error: No Exams Setup" if no exams are configured.
+    *   Scan results: Student ID, eligibility ("Eligible" or "Warn:NotAssigned"), or error messages like "Student Not Found", "Warn: Duplicate".
+    *   Form validation errors from the web page may also show a concise message.
 ```
