@@ -8,6 +8,9 @@
             {{ wtf.quick_form(form) }}
         </div>
     </div>
+    <p class="mt-3">
+        New User? <a href="{{ url_for('auth.register') }}">Click to Register!</a>
+    </p>
     {# If not using Flask-Bootstrap's wtf.quick_form:
     <form action="" method="post" novalidate>
         {{ form.hidden_tag() }}
