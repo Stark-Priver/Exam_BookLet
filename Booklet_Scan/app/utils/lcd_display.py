@@ -1,5 +1,11 @@
 import time
 
+
+DEFAULT_I2C_ADDRESS = 0x27  # Example: Common I2C address for 16x2 LCD with PCF8574
+DEFAULT_I2C_BUS = 1         # For Raspberry Pi, usually bus 1
+LCD_COLS = 16               # For 16x2 LCD: 16 columns
+LCD_ROWS = 2                # For 16x2 LCD: 2 rows
+
 I2C_HARDWARE_AVAILABLE = False
 CharLCD = None
 SMBus = None
@@ -13,14 +19,14 @@ except ImportError:
     print("Warning: I2C libraries (RPLCD or smbus2) not found. LCD will be disabled. This is expected on non-Pi systems.")
     pass # Continue without I2C specific libraries
 
-# Configuration for the LCD
-# Common I2C address for PCF8574 based LCDs. Common alternatives are 0x3f.
-# Use `i2cdetect -y 1` on Raspberry Pi to find the address.
-DEFAULT_I2C_ADDRESS = 0x27
-# Raspberry Pi I2C bus (1 for newer Pis, 0 for older ones)
-DEFAULT_I2C_BUS = 1
-LCD_COLS = 16 # Common LCD column count (e.g., 16x2 or 20x4)
-LCD_ROWS = 2  # Common LCD row count
+# # Configuration for the LCD
+# # Common I2C address for PCF8574 based LCDs. Common alternatives are 0x3f.
+# # Use `i2cdetect -y 1` on Raspberry Pi to find the address.
+# DEFAULT_I2C_ADDRESS = 0x27
+# # Raspberry Pi I2C bus (1 for newer Pis, 0 for older ones)
+# DEFAULT_I2C_BUS = 1
+# LCD_COLS = 16 # Common LCD column count (e.g., 16x2 or 20x4)
+# LCD_ROWS = 2  # Common LCD row count
 
 lcd = None
 lcd_active = False # Ensure this is defined at module level
@@ -81,13 +87,20 @@ def display_message(line1, line2="", clear_first=True, delay_after=None):
     Optionally waits for 'delay_after' seconds.
     """
     global lcd_active # Moved to the top of the function
-    if not lcd_active:
-        if lcd is None: # Attempt to initialize if not tried before or failed
-            print("LCD not active. Attempting to initialize...")
+    if not is_lcd_active(): # Use the getter
+        # Check if lcd object itself is None which means init was never even attempted or failed early
+        # or if I2C_HARDWARE_AVAILABLE is false from the start
+        if lcd is None or not I2C_HARDWARE_AVAILABLE:
+            print("LCD not available or not initialized. Attempting to initialize...")
             if not init_lcd(): # If init fails again, just print to console
                 print(f"Console LCD: L1: {line1}, L2: {line2}")
                 return
-        else: # LCD init was tried and failed
+            # If init_lcd somehow succeeded but lcd_active is still false (should not happen with current init_lcd logic)
+            # or if init_lcd succeeded and lcd_active is true now
+            if not is_lcd_active():
+                 print(f"Console LCD: L1: {line1}, L2: {line2}")
+                 return
+        else: # lcd object exists but lcd_active is False (e.g. a write error occurred previously)
             print(f"Console LCD: L1: {line1}, L2: {line2}")
             return
 
@@ -105,19 +118,20 @@ def display_message(line1, line2="", clear_first=True, delay_after=None):
         if delay_after is not None:
             time.sleep(delay_after)
 
-    except Exception as e: # Catch errors during write (e.g. if LCD disconnects)
+    except Exception as e:  # Catch errors during write (e.g. if LCD disconnects)
+        # global lcd_active # Already declared at function top
         print(f"Error writing to LCD: {e}")
         print("LCD functionality disabled.")
-        global lcd_active # Modify global
-        lcd_active = False
+        lcd_active = False # Corrected from True to False
         # Fallback to console
         print(f"Console LCD: L1: {line1}, L2: {line2}")
+
 
 
 def clear_display():
     """Clears the LCD display."""
     global lcd_active # Moved to the top of the function
-    if not lcd_active or lcd is None:
+    if not is_lcd_active(): # Use the getter
         print("Console LCD: Cleared")
         return
     try:
@@ -125,7 +139,7 @@ def clear_display():
     except Exception as e:
         print(f"Error clearing LCD: {e}")
         print("LCD functionality disabled.")
-        global lcd_active # Modify global
+        # global lcd_active # Already declared at function top
         lcd_active = False
 
 # Attempt to initialize LCD when this module is loaded
@@ -146,12 +160,12 @@ if __name__ == '__main__':
         display_message("Line 1 Again", "Line 2 Again", delay_after=3)
 
         clear_display()
-        lcd.write_string("Test Done.")
+        if lcd: # Check if lcd object exists before writing
+            lcd.write_string("Test Done.")
         print("Test complete. Check LCD.")
     else:
         print("LCD could not be initialized for testing.")
         print("Simulating messages to console via fallback:")
         display_message("Test L1", "Test L2 (fallback)")
         clear_display()
-
 ```
