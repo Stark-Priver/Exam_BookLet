@@ -1,6 +1,17 @@
 import time
-from RPLCD.i2c import CharLCD
-from smbus2 import SMBus # smbus-cffi provides smbus2
+
+I2C_HARDWARE_AVAILABLE = False
+CharLCD = None
+SMBus = None
+
+try:
+    from RPLCD.i2c import CharLCD
+    from smbus2 import SMBus # smbus-cffi provides smbus2
+    I2C_HARDWARE_AVAILABLE = True
+    print("I2C libraries loaded successfully.")
+except ImportError:
+    print("Warning: I2C libraries (RPLCD or smbus2) not found. LCD will be disabled. This is expected on non-Pi systems.")
+    pass # Continue without I2C specific libraries
 
 # Configuration for the LCD
 # Common I2C address for PCF8574 based LCDs. Common alternatives are 0x3f.
@@ -22,10 +33,21 @@ def init_lcd(i2c_address=DEFAULT_I2C_ADDRESS, i2c_bus=DEFAULT_I2C_BUS, cols=LCD_
     global lcd, lcd_active
     if lcd_active: # Already initialized
         return True
+
+    if not I2C_HARDWARE_AVAILABLE:
+        print("LCD disabled: I2C libraries not available (e.g., running on Windows).")
+        lcd_active = False
+        lcd = None
+        return False
+
     try:
         # Initialize SMBus
         bus = SMBus(i2c_bus)
         # Initialize CharLCD
+        # Ensure CharLCD is not None before calling it
+        if CharLCD is None:
+            raise ImportError("CharLCD class not loaded due to missing I2C libraries.")
+
         lcd = CharLCD(i2c_expander='PCF8574',
                       address=i2c_address,
                       port=i2c_bus, # RPLCD uses 'port' for bus number
