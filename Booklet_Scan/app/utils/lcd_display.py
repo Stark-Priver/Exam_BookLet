@@ -54,6 +54,7 @@ def display_message(line1, line2="", clear_first=True, delay_after=None):
     Clears the display first by default.
     Optionally waits for 'delay_after' seconds.
     """
+    global lcd_active # Moved to the top of the function
     if not lcd_active:
         if lcd is None: # Attempt to initialize if not tried before or failed
             print("LCD not active. Attempting to initialize...")
@@ -89,6 +90,7 @@ def display_message(line1, line2="", clear_first=True, delay_after=None):
 
 def clear_display():
     """Clears the LCD display."""
+    global lcd_active # Moved to the top of the function
     if not lcd_active or lcd is None:
         print("Console LCD: Cleared")
         return
