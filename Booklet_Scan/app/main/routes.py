@@ -25,7 +25,7 @@ def scan_ui():
     verified_student_info = request.args.get('student_info', None) # JSON string or similar
 
     # Initialize LCD if not already active
-    if not lcd_display.lcd_active:
+    if not lcd_display.is_lcd_active(): # Use the new getter function
         lcd_display.init_lcd()
 
     if not form.exam_id.choices:

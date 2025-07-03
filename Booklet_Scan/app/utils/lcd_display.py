@@ -23,7 +23,11 @@ LCD_COLS = 16 # Common LCD column count (e.g., 16x2 or 20x4)
 LCD_ROWS = 2  # Common LCD row count
 
 lcd = None
-lcd_active = False
+lcd_active = False # Ensure this is defined at module level
+
+def is_lcd_active():
+    """Returns the current status of lcd_active."""
+    return lcd_active
 
 def init_lcd(i2c_address=DEFAULT_I2C_ADDRESS, i2c_bus=DEFAULT_I2C_BUS, cols=LCD_COLS, rows=LCD_ROWS):
     """
