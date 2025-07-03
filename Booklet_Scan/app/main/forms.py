@@ -12,11 +12,13 @@ class ScanForm(FlaskForm):
     def __init__(self, *args, **kwargs):
         super(ScanForm, self).__init__(*args, **kwargs)
         # Populate exam choices dynamically
+        # Populate exam choices dynamically
+        # No explicit placeholder with ('', 'Text') is added here.
+        # The browser will default to the first actual option or show nothing if the list is empty.
+        # DataRequired validator will ensure an actual exam is selected on submit.
         self.exam_id.choices = [
             (e.id, f"{e.name} - {e.course} (on {e.date.strftime('%Y-%m-%d')} at {e.venue.name if e.venue else 'N/A'})")
             for e in Exam.query.join(Venue).order_by(Exam.date.desc(), Exam.name).all()
         ]
-        if not self.exam_id.choices:
-            self.exam_id.choices.insert(0, ('', 'No exams available - Please add exams in Admin Panel'))
-        else:
-            self.exam_id.choices.insert(0, ('', '--- Select an Exam ---'))
+        # An empty list of choices is fine; DataRequired will handle validation.
+        # The route will flash a message if no exams are available.

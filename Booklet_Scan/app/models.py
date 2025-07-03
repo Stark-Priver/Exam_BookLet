@@ -33,6 +33,14 @@ class Student(db.Model):
     def __repr__(self):
         return f'<Student {self.student_id} - {self.name}>'
 
+class Course(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(128), unique=True, nullable=False)
+    code = db.Column(db.String(20), unique=True, nullable=True) # E.g., CS101
+
+    def __repr__(self):
+        return f'<Course {self.name}{(" (" + self.code + ")") if self.code else ""}>'
+
 class Venue(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(128), unique=True, nullable=False)

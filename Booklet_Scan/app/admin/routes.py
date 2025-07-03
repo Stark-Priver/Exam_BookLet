@@ -2,23 +2,90 @@ from flask import render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 from app import db
 from app.admin import bp
-from app.models import Student, Venue, Exam, StudentExamAssignment
-from app.admin.forms import StudentForm, VenueForm, ExamForm, StudentExamAssignmentForm
+from app.models import Student, Venue, Exam, StudentExamAssignment, Course
+from app.admin.forms import StudentForm, VenueForm, ExamForm, StudentExamAssignmentForm, CourseForm
 
 # Utility to check if current user is an admin (adjust as needed if more roles are added)
+# Now using current_user.is_authenticated and current_user.username for checks in templates
+# This function could be removed if not used elsewhere or kept for Python-side checks.
 def is_admin():
-    return hasattr(current_user, 'username')
+    # Assuming AdminUser model has a 'username' attribute and other users might not or will be handled differently
+    return current_user.is_authenticated and hasattr(current_user, 'username')
 
 @bp.before_request
 @login_required # Ensures user is logged in for all admin routes
 def before_request():
-    if not is_admin():
+    if not is_admin(): # Or a more specific role check if you add roles
         flash('You do not have permission to access the admin area.')
         return redirect(url_for('main.index'))
 
 @bp.route('/dashboard')
 def dashboard():
     return render_template('admin/dashboard.html', title='Admin Dashboard')
+
+# --- Course CRUD ---
+@bp.route('/courses')
+def list_courses():
+    page = request.args.get('page', 1, type=int)
+    courses = Course.query.order_by(Course.name).paginate(page=page, per_page=10)
+    return render_template('admin/courses_list.html', courses=courses, title='Manage Courses')
+
+@bp.route('/courses/new', methods=['GET', 'POST'])
+def add_course():
+    form = CourseForm()
+    if form.validate_on_submit():
+        existing_course_name = Course.query.filter_by(name=form.name.data).first()
+        existing_course_code = None
+        if form.code.data: # Only check code if provided
+             existing_course_code = Course.query.filter_by(code=form.code.data).first()
+
+        if existing_course_name:
+            flash('Course name already exists.', 'warning')
+        elif existing_course_code:
+            flash('Course code already exists.', 'warning')
+        else:
+            course = Course(name=form.name.data, code=form.code.data if form.code.data else None)
+            db.session.add(course)
+            db.session.commit()
+            flash('Course added successfully!', 'success')
+            return redirect(url_for('admin.list_courses'))
+    return render_template('admin/course_form.html', form=form, title='Add Course')
+
+@bp.route('/courses/<int:id>/edit', methods=['GET', 'POST'])
+def edit_course(id):
+    course = Course.query.get_or_404(id)
+    form = CourseForm(obj=course)
+    if form.validate_on_submit():
+        if course.name != form.name.data and Course.query.filter_by(name=form.name.data).first():
+            flash('That course name is already in use.', 'warning')
+        elif form.code.data and course.code != form.code.data and Course.query.filter_by(code=form.code.data).first():
+            flash('That course code is already in use.', 'warning')
+        else:
+            course.name = form.name.data
+            course.code = form.code.data if form.code.data else None
+            db.session.commit()
+            flash('Course updated successfully!', 'success')
+            return redirect(url_for('admin.list_courses'))
+    return render_template('admin/course_form.html', form=form, title='Edit Course', course=course)
+
+@bp.route('/courses/<int:id>/delete', methods=['POST'])
+def delete_course(id):
+    course = Course.query.get_or_404(id)
+    # Add check if course is in use by students or exams if strict deletion is desired
+    # For now, simple delete
+    # Example check (if Student.course was a ForeignKey Student.course_id):
+    # if Student.query.filter_by(course_id=id).first() or Exam.query.filter_by(course_id=id).first():
+    #    flash('Cannot delete course: It is associated with students or exams.', 'danger')
+    #    return redirect(url_for('admin.list_courses'))
+    try:
+        db.session.delete(course)
+        db.session.commit()
+        flash('Course deleted successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting course: {str(e)}', 'danger')
+    return redirect(url_for('admin.list_courses'))
+
 
 # --- Student CRUD ---
 @bp.route('/students')
@@ -30,6 +97,15 @@ def list_students():
 @bp.route('/students/new', methods=['GET', 'POST'])
 def add_student():
     form = StudentForm()
+    # Populate course choices
+    form.course.choices = [(c.name, c.name) for c in Course.query.order_by(Course.name).all()]
+    if not form.course.choices:
+        form.course.choices.insert(0, ('', 'No courses available - Add courses first'))
+        flash('No courses available to assign. Please add courses first.', 'info')
+    # else:
+        # form.course.choices.insert(0, ('', '--- Select a Course ---'))
+
+
     if form.validate_on_submit():
         existing_student = Student.query.filter_by(student_id=form.student_id.data).first()
         if existing_student:
@@ -46,7 +122,14 @@ def add_student():
 def edit_student(id):
     student = Student.query.get_or_404(id)
     form = StudentForm(obj=student)
-    if form.validate_on_submit():
+    # Populate course choices
+    form.course.choices = [(c.name, c.name) for c in Course.query.order_by(Course.name).all()]
+    if not form.course.choices: # Should not happen if student has a course, but good for consistency
+        form.course.choices.insert(0, ('', 'No courses available - Add courses first'))
+    # else:
+        # form.course.choices.insert(0, ('', '--- Select a Course ---'))
+
+    if form.is_submitted() and form.validate(): # Use is_submitted() and validate() for edit
         # Check if student_id is being changed and if the new one already exists for another student
         if student.student_id != form.student_id.data:
             existing_student = Student.query.filter(Student.id != student.id, Student.student_id == form.student_id.data).first()

@@ -14,48 +14,53 @@
                     <form method="POST" action="{{ url_for('main.scan_ui') }}" id="scanForm">
                         {{ form.hidden_tag() }} {# CSRF token #}
 
-                        <div class="form-group row mb-3">
-                            <label for="exam_id" class="col-sm-3 col-form-label text-right">Select Exam:</label>
-                            <div class="col-sm-9">
-                                {{ form.exam_id(class="form-control" + (" is-invalid" if form.exam_id.errors else "")) }}
-                                {% if form.exam_id.errors %}
-                                    <div class="invalid-feedback">
-                                        {% for error in form.exam_id.errors %}<span>{{ error }}</span>{% endfor %}
-                                    </div>
-                                {% endif %}
+                        {% if form.exam_id.choices %}
+                            <div class="form-group row mb-3">
+                                <label for="exam_id" class="col-sm-3 col-form-label text-right">Select Exam:</label>
+                                <div class="col-sm-9">
+                                    {{ form.exam_id(class="form-control" + (" is-invalid" if form.exam_id.errors else "")) }}
+                                    {% if form.exam_id.errors %}
+                                        <div class="invalid-feedback">
+                                            {% for error in form.exam_id.errors %}<span>{{ error }}</span>{% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
                             </div>
-                        </div>
 
-                        <div class="form-group row mb-3">
-                            <label for="booklet_code" class="col-sm-3 col-form-label text-right">Booklet Code:</label>
-                            <div class="col-sm-9">
-                                {{ form.booklet_code(class="form-control" + (" is-invalid" if form.booklet_code.errors else ""), autofocus=true, placeholder="Scan or type booklet code") }}
-                                {% if form.booklet_code.errors %}
-                                    <div class="invalid-feedback">
-                                        {% for error in form.booklet_code.errors %}<span>{{ error }}</span>{% endfor %}
-                                    </div>
-                                {% endif %}
+                            <div class="form-group row mb-3">
+                                <label for="booklet_code" class="col-sm-3 col-form-label text-right">Booklet Code:</label>
+                                <div class="col-sm-9">
+                                    {{ form.booklet_code(class="form-control" + (" is-invalid" if form.booklet_code.errors else ""), autofocus=true, placeholder="Scan or type booklet code") }}
+                                    {% if form.booklet_code.errors %}
+                                        <div class="invalid-feedback">
+                                            {% for error in form.booklet_code.errors %}<span>{{ error }}</span>{% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
                             </div>
-                        </div>
 
-                        {# This field will be populated by JavaScript after a successful scan or if a student needs to be manually entered/confirmed #}
-                        <div class="form-group row mb-3">
-                            <label for="student_identifier" class="col-sm-3 col-form-label text-right">Student ID:</label>
-                            <div class="col-sm-9">
-                                {{ form.student_identifier(class="form-control" + (" is-invalid" if form.student_identifier.errors else ""), placeholder="Student ID (e.g., from booklet or manual entry)") }}
-                                {% if form.student_identifier.errors %}
-                                    <div class="invalid-feedback">
-                                        {% for error in form.student_identifier.errors %}<span>{{ error }}</span>{% endfor %}
-                                    </div>
-                                {% endif %}
+                            <div class="form-group row mb-3">
+                                <label for="student_identifier" class="col-sm-3 col-form-label text-right">Student ID:</label>
+                                <div class="col-sm-9">
+                                    {{ form.student_identifier(class="form-control" + (" is-invalid" if form.student_identifier.errors else ""), placeholder="Student ID (e.g., from booklet or manual entry)") }}
+                                    {% if form.student_identifier.errors %}
+                                        <div class="invalid-feedback">
+                                            {% for error in form.student_identifier.errors %}<span>{{ error }}</span>{% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
                             </div>
-                        </div>
 
-                        <div class="form-group row">
-                            <div class="col-sm-9 offset-sm-3">
-                                {{ form.submit(class="btn btn-primary btn-block") }}
+                            <div class="form-group row">
+                                <div class="col-sm-9 offset-sm-3">
+                                    {{ form.submit(class="btn btn-primary btn-block") }}
+                                </div>
                             </div>
-                        </div>
+                        {% else %}
+                            {# This message is shown if there are no exams to select. #}
+                            {# Flashed message from the route will also appear. #}
+                            <p class="text-center text-muted">No exams available for scanning. Please add exams in the admin panel.</p>
+                        {% endif %}
                     </form>
                 </div>
             </div>
