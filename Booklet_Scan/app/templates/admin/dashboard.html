@@ -1,18 +1,65 @@
 {% extends "base.html" %}
 
-{% block content %}
-    <h1>Admin Dashboard</h1>
-    <p>Welcome, {{ current_user.username }}!</p>
-    <p>This is the central place for managing the exam booklet system.</p>
-
-    <h2>Quick Links:</h2>
-    <div class="list-group">
-        <a href="{{ url_for('admin.list_students') }}" class="list-group-item list-group-item-action">Manage Students</a>
-        <a href="{{ url_for('admin.list_venues') }}" class="list-group-item list-group-item-action">Manage Venues</a>
-        <a href="{{ url_for('admin.list_exams') }}" class="list-group-item list-group-item-action">Manage Exams</a>
-        <a href="{{ url_for('admin.list_assignments') }}" class="list-group-item list-group-item-action">Manage Student-Exam Assignments</a>
-        <a href="#" class="list-group-item list-group-item-action disabled">View Scan Records (To be implemented)</a>
+{% block app_content %}
+<div class="container mt-4">
+    <div class="jumbotron text-center bg-light shadow-sm">
+        <h1 class="display-4">Admin Dashboard</h1>
+        <p class="lead">Welcome, {{ current_user.username }}!</p>
+        <hr class="my-4">
+        <p>Manage students, venues, exams, assignments, and the scanning process from here.</p>
     </div>
 
-    <p class="mt-4"><a href="{{ url_for('main.scan_ui') }}" class="btn btn-primary">Go to Scanning Interface</a></p>
+    <h2 class="mb-3 text-center">Management Sections</h2>
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Students</h5>
+                    <p class="card-text">Add, edit, or remove student records.</p>
+                    <a href="{{ url_for('admin.list_students') }}" class="btn btn-outline-primary">Manage Students</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Venues</h5>
+                    <p class="card-text">Define and manage examination venues.</p>
+                    <a href="{{ url_for('admin.list_venues') }}" class="btn btn-outline-primary">Manage Venues</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Exams</h5>
+                    <p class="card-text">Schedule and manage exam details.</p>
+                    <a href="{{ url_for('admin.list_exams') }}" class="btn btn-outline-primary">Manage Exams</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Student Assignments</h5>
+                    <p class="card-text">Assign students to their respective exams.</p>
+                    <a href="{{ url_for('admin.list_assignments') }}" class="btn btn-outline-primary">Manage Assignments</a>
+                </div>
+            </div>
+        </div>
+    </div>
+     <div class="row">
+        <div class="col-md-12 mb-3 text-center">
+            <hr>
+            <a href="{{ url_for('main.scan_ui') }}" class="btn btn-lg btn-success shadow">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-upc-scan" viewBox="0 0 16 16">
+                    <path d="M1.5 1a.5.5 0 0 0-.5.5v3a.5.5 0 0 1-1 0v-3A1.5 1.5 0 0 1 1.5 0h3a.5.5 0 0 1 0 1h-3zM11 .5a.5.5 0 0 1 .5-.5h3A1.5 1.5 0 0 1 16 1.5v3a.5.5 0 0 1-1 0v-3a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 1-.5-.5zM.5 11a.5.5 0 0 1 .5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 1 0 1h-3A1.5 1.5 0 0 1 0 14.5v-3a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v3a1.5 1.5 0 0 1-1.5 1.5h-3a.5.5 0 0 1 0-1h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 1 .5-.5zM3 4.5a.5.5 0 0 1 1 0v7a.5.5 0 0 1-1 0v-7zm2 0a.5.5 0 0 1 1 0v7a.5.5 0 0 1-1 0v-7zm2 0a.5.5 0 0 1 1 0v7a.5.5 0 0 1-1 0v-7zm2 0a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-7zm3 0a.5.5 0 0 1 1 0v7a.5.5 0 0 1-1 0v-7z"/>
+                </svg>
+                Go to Scanning Interface
+            </a>
+        </div>
+    </div>
+</div>
 {% endblock %}

@@ -3,12 +3,34 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <!-- Using Bootswatch "Minty" theme -->
+    <link rel="stylesheet" href="https://bootswatch.com/4/minty/bootstrap.min.css">
     <title>{{ title }} - Exam Booklet System</title>
+    <style>
+        /* Minor custom adjustments if needed */
+        body {
+            padding-top: 56px; /* Adjust if navbar is fixed, otherwise can be less or 0 */
+        }
+        .table-hover tbody tr:hover {
+            background-color: #f1f1f1; /* Or a color that fits Minty theme better */
+        }
+        .btn-primary { /* Ensure Minty's primary color is used if not overridden by default */
+             background-color: #52c399; /* Minty's primary color */
+             border-color: #52c399;
+        }
+        .btn-primary:hover {
+            background-color: #47a883; /* Darker shade for hover */
+            border-color: #47a883;
+        }
+        /* Add more subtle hover effects for list group items */
+        .list-group-item-action:hover {
+            background-color: #e9ecef; /* Light grey, adjust to theme */
+        }
+    </style>
   </head>
   <body>
-    <nav class="navbar navbar-expand-lg navbar-light bg-light">
-      <a class="navbar-brand" href="{{ url_for('main.index') }}">Booklet System</a>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
+      <a class="navbar-brand" href="{{ url_for('main.index') }}">BookletScan Pro</a>
       <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
       </button>
@@ -22,36 +44,28 @@
             <a class="nav-link" href="{{ url_for('auth.login') }}">Admin Login</a>
           </li>
           {% else %}
-            {% if hasattr(current_user, 'username') %} {# Check if AdminUser #}
+            {# User is authenticated #}
+            {% if hasattr(current_user, 'username') %} {# Specifically an AdminUser #}
             <li class="nav-item">
               <a class="nav-link" href="{{ url_for('admin.dashboard') }}">Admin Dashboard</a>
             </li>
             {% endif %}
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('main.scan_ui') }}">Scan Interface</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('auth.logout') }}">Logout</a>
-          </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('main.scan_ui') }}">Scan Interface</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('auth.logout') }}">Logout ({{ current_user.username if hasattr(current_user, 'username') else 'User' }})</a>
+            </li>
           {% endif %}
         </ul>
-        {% if current_user.is_authenticated and hasattr(current_user, 'username') %}
-        <span class="navbar-text">
-          Logged in as: {{ current_user.username }}
-        </span>
-        {% endif %}
+        {# Removed redundant logged-in as message, it's on the logout button now #}
       </div>
     </nav>
 
+    {# Main content block for child templates. Flash messages are handled within child templates like scan_interface.html or admin pages #}
     <div class="container mt-3">
-      {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-        <div class="alert alert-{{ category if category != 'message' else 'info' }}">{{ message }}</div>
-        {% endfor %}
-      {% endif %}
-      {% endwith %}
-      {% block content %}{% endblock %}
+      {% block app_content %}{% endblock %}
+      {% block content %}{% endblock %} {# Kept for compatibility if any old templates use it directly, prefer app_content #}
     </div>
 
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
