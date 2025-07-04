@@ -48,7 +48,7 @@ def init_lcd(i2c_address=DEFAULT_I2C_ADDRESS, i2c_bus=DEFAULT_I2C_BUS, cols=LCD_
 
         lcd = CharLCD(i2c_expander='PCF8574',
                       address=i2c_address,
-                      bus=bus,
+                      # bus=bus,
                       cols=cols,
                       rows=rows,
                       dotsize=8,
