@@ -288,4 +288,3 @@ if __name__ == '__main__':
         print(f"Console Scroll L2: {instructions_placeholder}")
         clear_display()
 
-```
