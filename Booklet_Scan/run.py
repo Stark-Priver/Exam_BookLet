@@ -28,11 +28,14 @@ if __name__ == '__main__':
     # Also attempt to initialize LCD at startup
     from app.utils import lcd_display # Import here to avoid circular if utils imports app components
     with app.app_context():
-        print("Attempting to initialize LCD from run.py...")
-        lcd_display.init_lcd()
-        if lcd_display.lcd_active:
-            lcd_display.display_message("App Started", "System Online", delay_after=2)
-        else:
-            print("LCD not active after startup initialization attempt from run.py.")
+        print("Attempting to initialize LCD and display IP from run.py...")
+        # init_lcd is called by display_ip_address if needed, or can be called explicitly first
+        # if lcd_display.init_lcd():
+        #    lcd_display.display_ip_address()
+        # else:
+        #    print("LCD could not be initialized from run.py. IP will not be displayed on LCD.")
+        # Simpler: display_ip_address will attempt init if LCD is not active.
+        lcd_display.display_ip_address()
+
 
     app.run(debug=True, host='0.0.0.0', port=5000)

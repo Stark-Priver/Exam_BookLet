@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% import "bootstrap/wtf.html" as wtf %}
+
+{% block app_content %}
+<div class="container mt-4">
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <h1 class="display-5">Scan Records (Attendance)</h1>
+            <p class="text-muted">View all recorded booklet scans, ordered by most recent.</p>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            {% if scan_records.items %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Student Name</th>
+                            <th>Student ID</th>
+                            <th>Exam Name</th>
+                            <th>Booklet Code</th>
+                            <th>Timestamp (UTC)</th>
+                            <th>Timestamp (Local)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in scan_records.items %}
+                        <tr>
+                            <td>{{ (scan_records.page - 1) * scan_records.per_page + loop.index }}</td> {# Global record number #}
+                            <td>{{ record.student_name }}</td>
+                            <td>{{ record.student_identifier }}</td>
+                            <td>{{ record.exam_name }}</td>
+                            <td>{{ record.booklet_code }}</td>
+                            <td>{{ record.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            {# Convert UTC to local time using JavaScript for client-side display #}
+                            <td data-utc-timestamp="{{ record.timestamp.isoformat() }}">
+                                <script>
+                                    (function() {
+                                        var elements = document.querySelectorAll('td[data-utc-timestamp="{{ record.timestamp.isoformat() }}"]');
+                                        elements.forEach(function(element) {
+                                            if (!element.getAttribute('data-converted')) {
+                                                var utcDate = new Date(element.getAttribute('data-utc-timestamp'));
+                                                element.textContent = utcDate.toLocaleString();
+                                                element.setAttribute('data-converted', 'true');
+                                            }
+                                        });
+                                    })();
+                                </script>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info" role="alert">
+                No scan records found yet.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if scan_records.pages > 1 %}
+    <nav aria-label="Scan record navigation" class="mt-4">
+        <ul class="pagination justify-content-center">
+            {# Previous Page Link #}
+            <li class="page-item {% if not scan_records.has_prev %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('admin.list_scan_records', page=scan_records.prev_num if scan_records.has_prev else '#') }}" tabindex="-1" aria-disabled="{{ 'true' if not scan_records.has_prev else 'false' }}">
+                    &laquo; Previous
+                </a>
+            </li>
+
+            {# Page Numbers #}
+            {% for page_num in scan_records.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                {% if page_num %}
+                    <li class="page-item {% if page_num == scan_records.page %}active{% endif %}">
+                        <a class="page-link" href="{{ url_for('admin.list_scan_records', page=page_num) }}">{{ page_num }}</a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                {% endif %}
+            {% endfor %}
+
+            {# Next Page Link #}
+            <li class="page-item {% if not scan_records.has_next %}disabled{% endif %}">
+                <a class="page-link" href="{{ url_for('admin.list_scan_records', page=scan_records.next_num if scan_records.has_next else '#') }}">
+                    Next &raquo;
+                </a>
+            </li>
+        </ul>
+    </nav>
+    <p class="text-center text-muted">
+        Showing page {{ scan_records.page }} of {{ scan_records.pages }}. Total Records: {{ scan_records.total }}
+    </p>
+    {% endif %}
+</div>
+{% endblock %}
