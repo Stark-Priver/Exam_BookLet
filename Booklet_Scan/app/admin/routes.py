@@ -4,6 +4,7 @@ from app import db
 from app.admin import bp
 from app.models import Student, Venue, Exam, StudentExamAssignment, Course
 from app.admin.forms import StudentForm, VenueForm, ExamForm, StudentExamAssignmentForm, CourseForm
+from app.utils import lcd_display # For controlling the LCD
 
 # Utility to check if current user is an admin (adjust as needed if more roles are added)
 # Now using current_user.is_authenticated and current_user.username for checks in templates
@@ -260,9 +261,10 @@ def edit_exam(id):
 @bp.route('/exams/<int:id>/delete', methods=['POST'])
 def delete_exam(id):
     exam = Exam.query.get_or_404(id)
-    # Consider implications: assignments, scan records
+    if exam.exam_status == Exam.STATUS_AUTH_ACTIVE:
+        flash('Cannot delete exam while authentication is active. Please stop authentication first.', 'danger')
+        return redirect(url_for('admin.list_exams'))
     try:
-        # Add checks for related assignments or scans if strict deletion is not desired
         if exam.assignments.count() > 0 or exam.scans.count() > 0:
              flash('Cannot delete exam: It has student assignments or scan records. Please remove them first.', 'danger')
              return redirect(url_for('admin.list_exams'))
@@ -274,6 +276,61 @@ def delete_exam(id):
         flash(f'Error deleting exam: {str(e)}', 'danger')
     return redirect(url_for('admin.list_exams'))
 
+@bp.route('/exams/<int:exam_id>/set_status/<string:status>', methods=['POST'])
+@login_required
+def set_exam_status(exam_id, status):
+    exam = Exam.query.get_or_404(exam_id)
+
+    # Ensure only one exam can be in 'AuthenticationActive' state at a time
+    if status == Exam.STATUS_AUTH_ACTIVE:
+        active_exam = Exam.query.filter(Exam.exam_status == Exam.STATUS_AUTH_ACTIVE, Exam.id != exam_id).first()
+        if active_exam:
+            flash(f"Another exam '{active_exam.name}' is already in authentication mode. Please stop it first.", 'danger')
+            return redirect(url_for('admin.list_exams'))
+
+        # Set this exam's status
+        exam.exam_status = Exam.STATUS_AUTH_ACTIVE
+        db.session.commit()
+
+        # Update LCD - User needs to provide actual link and instructions
+        # For now, using placeholders.
+        exam_link_placeholder = f"/exam/{exam.id}/join" # Example
+        instructions_placeholder = f"Exam: {exam.name[:LCD_COLS-6]}. Scan ID."
+
+        # Ensure instruction text fits reasonable length for scrolling on one line
+        # Truncate if necessary, or make it more concise
+
+        lcd_display.display_scrolling_message(
+            f"Link: {exam_link_placeholder}",
+            instructions_placeholder,
+            scroll_delay=0.4
+        )
+        flash(f"Exam '{exam.name}' authentication started. LCD updated.", 'success')
+
+    elif status == Exam.STATUS_PENDING: # This will be our "Stop" action
+        if exam.exam_status == Exam.STATUS_AUTH_ACTIVE:
+            exam.exam_status = Exam.STATUS_PENDING
+            db.session.commit()
+            lcd_display.stop_scrolling_message_if_active()
+            lcd_display.display_ip_address() # Revert to IP address display
+            flash(f"Exam '{exam.name}' authentication stopped. LCD reverted to IP display.", 'success')
+        else:
+            # If it wasn't active, just ensure it's pending (or handle other statuses)
+            exam.exam_status = Exam.STATUS_PENDING
+            db.session.commit()
+            flash(f"Exam '{exam.name}' status set to Pending.", 'info')
+            # If some other exam was active, its message would continue.
+            # Only revert to IP if THIS exam was the one being stopped.
+            # Consider if a general "no exam active, show IP" logic is needed on LCD side.
+            # For now, display_ip_address() is called when an active exam is stopped.
+    else:
+        # Handle other statuses if any (e.g., InProgress, Finished)
+        exam.exam_status = status
+        db.session.commit()
+        flash(f"Exam '{exam.name}' status changed to {status}.", 'info')
+        # Potentially update LCD for other states too if needed in future
+
+    return redirect(url_for('admin.list_exams'))
 
 # --- Student-Exam Assignment CRUD ---
 @bp.route('/assignments')
@@ -323,3 +380,27 @@ def delete_assignment(id):
         db.session.rollback()
         flash(f'Error deleting assignment: {str(e)}', 'danger')
     return redirect(url_for('admin.list_assignments'))
+
+# --- Scan Records Viewing ---
+@bp.route('/scan_records')
+@login_required
+def list_scan_records():
+    page = request.args.get('page', 1, type=int)
+    # Query ScanRecord, joining with Student and Exam to get their names
+    # Order by timestamp descending to show newest scans first
+    scan_records = ScanRecord.query.join(Student, ScanRecord.student_id == Student.id)\
+                                  .join(Exam, ScanRecord.exam_id == Exam.id)\
+                                  .add_columns(
+                                      ScanRecord.id,
+                                      Student.name.label('student_name'),
+                                      Student.student_id.label('student_identifier'),
+                                      Exam.name.label('exam_name'),
+                                      ScanRecord.booklet_code,
+                                      ScanRecord.timestamp
+                                  )\
+                                  .order_by(ScanRecord.timestamp.desc())\
+                                  .paginate(page=page, per_page=15) # Show 15 records per page
+
+    return render_template('admin/scan_records_list.html',
+                           scan_records=scan_records,
+                           title='View Scan Records')

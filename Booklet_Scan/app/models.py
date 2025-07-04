@@ -60,12 +60,21 @@ class Exam(db.Model):
     date = db.Column(db.Date, nullable=False)
     start_time = db.Column(db.Time, nullable=False)
     end_time = db.Column(db.Time, nullable=False)
+    # New field for exam status
+    # Possible values: 'Pending', 'AuthenticationActive', 'InProgress', 'Finished'
+    exam_status = db.Column(db.String(30), default='Pending', nullable=False)
 
     assignments = db.relationship('StudentExamAssignment', backref='exam', lazy='dynamic')
     scans = db.relationship('ScanRecord', backref='exam', lazy='dynamic')
 
+    # Define constants for exam statuses
+    STATUS_PENDING = 'Pending'
+    STATUS_AUTH_ACTIVE = 'AuthenticationActive'
+    STATUS_IN_PROGRESS = 'InProgress' # Future use
+    STATUS_FINISHED = 'Finished'     # Future use
+
     def __repr__(self):
-        return f'<Exam {self.name} on {self.date} at {self.venue.name if self.venue else "N/A"}>'
+        return f'<Exam {self.name} ({self.exam_status}) on {self.date} at {self.venue.name if self.venue else "N/A"}>'
 
 class StudentExamAssignment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
