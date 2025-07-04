@@ -6,3 +6,5 @@ Flask-WTF>=0.15 # For forms
 Flask-Bootstrap>=1.0 # For Bootstrap styling and wtf.html
 RPLCD>=1.0 # For I2C LCD Display on Raspberry Pi
 smbus-cffi>=0.5.1 # Often needed by RPLCD on newer Python/Pi for I2C communication
+evdev>=1.6.1 # For direct barcode scanner input on Linux/Pi
+requests>=2.25.1 # For scanner_listener.py to make HTTP requests to Flask API

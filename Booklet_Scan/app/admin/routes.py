@@ -1,10 +1,15 @@
 from flask import render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
+import json
+import os
+from datetime import datetime, timezone
+from flask import current_app
 from app import db
 from app.admin import bp
 from app.models import Student, Venue, Exam, StudentExamAssignment, Course
 from app.admin.forms import StudentForm, VenueForm, ExamForm, StudentExamAssignmentForm, CourseForm
 from app.utils import lcd_display # For controlling the LCD
+from app.utils.status_utils import write_scan_status, clear_scan_status, initialize_scan_status_file # Import from new location
 
 # Utility to check if current user is an admin (adjust as needed if more roles are added)
 # Now using current_user.is_authenticated and current_user.username for checks in templates
@@ -16,6 +21,12 @@ def is_admin():
 @bp.before_request
 @login_required # Ensures user is logged in for all admin routes
 def before_request():
+    # Initialize scan_status.json if it doesn't exist, on first access to admin area by an admin
+    # This is a pragmatic place to put it for now.
+    # A more robust solution might be in app creation context if the file is critical from very start.
+    if current_user.is_authenticated and hasattr(current_user, 'username'): # Check if admin user
+        initialize_scan_status_file()
+
     if not is_admin(): # Or a more specific role check if you add roles
         flash('You do not have permission to access the admin area.')
         return redirect(url_for('main.index'))
@@ -292,43 +303,53 @@ def set_exam_status(exam_id, status):
         exam.exam_status = Exam.STATUS_AUTH_ACTIVE
         db.session.commit()
 
+        # Update scan_status.json
+        status_payload = {
+            "active_exam_id": exam.id,
+            "exam_name": exam.name,
+            "expected_input_type": "student", # Initial state for a newly activated exam
+            "verified_student_id": None,
+            "verified_student_name": None,
+            "status_timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        write_scan_status(status_payload)
+
         # Update LCD - User needs to provide actual link and instructions
         # For now, using placeholders.
         exam_link_placeholder = f"/exam/{exam.id}/join" # Example
-        instructions_placeholder = f"Exam: {exam.name[:LCD_COLS-6]}. Scan ID."
-
-        # Ensure instruction text fits reasonable length for scrolling on one line
-        # Truncate if necessary, or make it more concise
+        instructions_placeholder = f"Exam: {exam.name[:LCD_COLS-6]}. Scan Student ID." # Changed to Scan Student ID
 
         lcd_display.display_scrolling_message(
             f"Link: {exam_link_placeholder}",
             instructions_placeholder,
             scroll_delay=0.4
         )
-        flash(f"Exam '{exam.name}' authentication started. LCD updated.", 'success')
+        flash(f"Exam '{exam.name}' authentication started. LCD updated. Ready for Student ID scans via listener.", 'success')
 
     elif status == Exam.STATUS_PENDING: # This will be our "Stop" action
         if exam.exam_status == Exam.STATUS_AUTH_ACTIVE:
             exam.exam_status = Exam.STATUS_PENDING
             db.session.commit()
+            clear_scan_status() # Clear the status file
             lcd_display.stop_scrolling_message_if_active()
             lcd_display.display_ip_address() # Revert to IP address display
-            flash(f"Exam '{exam.name}' authentication stopped. LCD reverted to IP display.", 'success')
+            flash(f"Exam '{exam.name}' authentication stopped. LCD reverted to IP display. Scan listener idle.", 'success')
         else:
-            # If it wasn't active, just ensure it's pending (or handle other statuses)
+            # If it wasn't active, just ensure it's pending
             exam.exam_status = Exam.STATUS_PENDING
             db.session.commit()
+            # If this exam was not the one in scan_status.json, do not clear it,
+            # as another exam might theoretically be active (though UI prevents this).
+            # However, current logic implies only one active, so clearing is generally safe if we ensure consistency.
+            # To be very safe, only clear if this exam_id matches active_exam_id in file.
+            # For now, the global clear_scan_status on stopping any active exam is fine.
             flash(f"Exam '{exam.name}' status set to Pending.", 'info')
-            # If some other exam was active, its message would continue.
-            # Only revert to IP if THIS exam was the one being stopped.
-            # Consider if a general "no exam active, show IP" logic is needed on LCD side.
-            # For now, display_ip_address() is called when an active exam is stopped.
     else:
         # Handle other statuses if any (e.g., InProgress, Finished)
+        # For now, other statuses do not affect scan_status.json directly unless they imply stopping.
         exam.exam_status = status
         db.session.commit()
         flash(f"Exam '{exam.name}' status changed to {status}.", 'info')
-        # Potentially update LCD for other states too if needed in future
 
     return redirect(url_for('admin.list_exams'))
 

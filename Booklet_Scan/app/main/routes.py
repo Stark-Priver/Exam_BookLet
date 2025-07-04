@@ -1,10 +1,13 @@
 from flask import render_template, redirect, url_for, flash, request, jsonify, current_app
 from flask_login import current_user, login_required
+from flask import render_template, redirect, url_for, flash, request, jsonify, current_app
+from flask_login import current_user, login_required
 from app import db
 from app.main import bp
-from app.main.forms import ScanForm
+from app.main.forms import ScanForm # May not be needed for API, but keep for /scan GET route
 from app.models import Exam, Student, ScanRecord, StudentExamAssignment
 from app.utils import lcd_display # Import the LCD utility
+from app.utils.status_utils import read_scan_status, write_scan_status, clear_scan_status # For headless scanning status
 
 @bp.route('/')
 @bp.route('/index')
@@ -160,4 +163,136 @@ def scan_ui():
     form.booklet_code.validators = [v for v in form.booklet_code.validators if not isinstance(v, DataRequired)]
     form.booklet_code.validators.append(Optional()) # Ensure it's Optional for initial GET
 
-    return render_template('main/scan_interface.html', title='Scan Booklets', form=form, scan_step=scan_step, student_info=verified_student_info)
+    # For headless mode, the scan_ui GET route will now mostly display status
+    # The actual scanning logic is moved to the internal API
+    current_scan_status = read_scan_status()
+    active_exam_name = current_scan_status.get('exam_name', 'N/A')
+    expected_input = current_scan_status.get('expected_input_type', 'none')
+    verified_student_name = current_scan_status.get('verified_student_name', '')
+
+
+    return render_template('main/scan_interface.html',
+                           title='Scan Interface Status',
+                           form=form, # Kept for exam selection if that's still part of UI
+                           scan_step=scan_step,  # This might be less relevant or derived from current_scan_status
+                           student_info=verified_student_info, # As above
+                           active_exam_name=active_exam_name,
+                           expected_input=expected_input,
+                           verified_student_name=verified_student_name
+                           )
+
+
+@bp.route('/api/v1/internal_scan', methods=['POST'])
+def internal_scan_api():
+    # 1. Authenticate request (e.g., from localhost only)
+    if not request.is_json:
+        return jsonify({"status": "error", "message": "Invalid request: Content-Type must be application/json"}), 400
+
+    # For development on non-Pi, allow any remote addr. For production Pi, enforce '127.0.0.1'.
+    # Set an environment variable or config for this check to be flexible.
+    # For now, let's assume current_app.debug might mean dev mode.
+    if not current_app.debug and request.remote_addr != '127.0.0.1':
+        current_app.logger.warning(f"Internal API access denied for remote_addr: {request.remote_addr}")
+        return jsonify({"status": "error", "message": "Access denied."}), 403
+
+    data = request.get_json()
+    scanned_data_value = data.get('scanned_data')
+    scan_type = data.get('data_type') # 'student' or 'booklet'
+    # active_exam_id_from_listener = data.get('active_exam_id') # Listener sends this
+    # verified_student_id_from_listener = data.get('verified_student_id') # Listener sends this if type is booklet
+
+    if not all([scanned_data_value, scan_type]):
+        return jsonify({"status": "error", "message": "Missing scanned_data or data_type"}), 400
+
+    # 2. Read current scan status from file
+    current_status = read_scan_status()
+    active_exam_id = current_status.get("active_exam_id")
+    expected_input_type = current_status.get("expected_input_type")
+    # exam_name = current_status.get("exam_name", "Unknown Exam")
+
+    if not active_exam_id or expected_input_type == "none":
+        msg = "No active exam session or not expecting input."
+        lcd_display.display_message("Scan Error:", "No Active Exam", delay_after=3)
+        return jsonify({"status": "error", "message": msg}), 400 # Bad request or conflict
+
+    if scan_type != expected_input_type:
+        msg = f"Unexpected scan type. Expected '{expected_input_type}', got '{scan_type}'."
+        lcd_display.display_message("Scan Error:", "Wrong Scan Type", delay_after=3)
+        return jsonify({"status": "error", "message": msg}), 400
+
+    # 3. Process scan based on type
+    exam = Exam.query.get(active_exam_id)
+    if not exam: # Should not happen if status file is consistent
+        clear_scan_status() # Clear inconsistent status
+        lcd_display.display_message("System Error:", "Exam Not Found", delay_after=3)
+        return jsonify({"status": "error", "message": "Active exam not found in DB. Status cleared."}), 500
+
+    if scan_type == "student":
+        student = Student.query.filter_by(student_id=scanned_data_value).first()
+        if not student:
+            lcd_display.display_message(f"Stud ID:{scanned_data_value[:8]}", "Not Found", delay_after=3)
+            return jsonify({"status": "error", "message": f"Student ID '{scanned_data_value}' not found."}), 200 # 200 to indicate processed, but with error msg for listener
+
+        assignment = StudentExamAssignment.query.filter_by(student_id=student.id, exam_id=active_exam_id).first()
+        if not assignment:
+            lcd_display.display_message(f"{student.name[:16]}", "NOT ELIGIBLE", delay_after=3)
+            # Still update status to show this student was checked, but not eligible for booklet scan
+            current_status["verified_student_id"] = student.id
+            current_status["verified_student_name"] = student.name
+            # current_status["expected_input_type"] = "student" # Stay expecting student
+            write_scan_status(current_status)
+            return jsonify({"status": "error", "message": f"Student {student.name} not eligible for {exam.name}."}), 200
+
+        # Student is eligible, update status to expect booklet
+        current_status["expected_input_type"] = "booklet"
+        current_status["verified_student_id"] = student.id
+        current_status["verified_student_name"] = student.name
+        write_scan_status(current_status)
+        lcd_display.display_message(f"{student.name[:16]}", "OK: Scan Booklet", delay_after=2)
+        return jsonify({"status": "success", "message": f"Student {student.name} eligible. Scan booklet."}), 200
+
+    elif scan_type == "booklet":
+        verified_student_id = current_status.get("verified_student_id")
+        verified_student_name = current_status.get("verified_student_name", "N/A") # Get name for LCD
+
+        if not verified_student_id:
+            lcd_display.display_message("Scan Error:", "No Student Set", delay_after=3)
+            # Reset to expect student ID again as state is inconsistent
+            current_status["expected_input_type"] = "student"
+            current_status["verified_student_id"] = None
+            current_status["verified_student_name"] = None
+            write_scan_status(current_status)
+            return jsonify({"status": "error", "message": "No student verified for booklet scan. Please scan student ID first."}), 400
+
+        # Check for duplicate booklet in the same exam
+        existing_scan = ScanRecord.query.filter_by(exam_id=active_exam_id, booklet_code=scanned_data_value).first()
+        if existing_scan:
+            scanned_for_student = Student.query.get(existing_scan.student_id)
+            dup_msg_lcd = f"BK:{scanned_data_value[:6]} DUP:{scanned_for_student.name[:5]}" if scanned_for_student else f"BK:{scanned_data_value[:6]} DUPL"
+            lcd_display.display_message("Warning:", dup_msg_lcd, delay_after=3)
+            # Don't change expected_input_type, allow re-scan of booklet
+            return jsonify({"status": "error", "message": f"Booklet '{scanned_data_value}' already scanned for this exam (Student: {scanned_for_student.name if scanned_for_student else 'Unknown'})."}), 200
+
+        # Record the scan
+        try:
+            scan_record = ScanRecord(student_id=verified_student_id, exam_id=active_exam_id, booklet_code=scanned_data_value)
+            db.session.add(scan_record)
+            db.session.commit()
+
+            lcd_display.display_message(f"BK:{scanned_data_value[:10]} OK", f"{verified_student_name[:16]}", delay_after=3)
+
+            # Reset to expect next student ID
+            current_status["expected_input_type"] = "student"
+            current_status["verified_student_id"] = None
+            current_status["verified_student_name"] = None
+            write_scan_status(current_status)
+
+            return jsonify({"status": "success", "message": f"Booklet '{scanned_data_value}' recorded for student ID {verified_student_id}."}), 200
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Error saving scan record via API: {e}")
+            lcd_display.display_message("Error:", "DB Save Failed", delay_after=3)
+            # Don't change expected_input_type, allow re-try of booklet scan
+            return jsonify({"status": "error", "message": "Database error saving scan record."}), 500
+    else:
+        return jsonify({"status": "error", "message": "Invalid data_type specified."}), 400
