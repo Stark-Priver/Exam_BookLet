@@ -6,7 +6,7 @@
     <div class="row mb-3">
         <div class="col-md-12">
             <h1 class="display-5">Scan Records (Attendance)</h1>
-            <p class="text-muted">View all recorded booklet scans, ordered by most recent.</p>
+            <p class="text-muted">View all recorded booklet scans grouped by student, ordered by most recent.</p>
         </div>
     </div>
 
@@ -21,34 +21,54 @@
                             <th>Student Name</th>
                             <th>Student ID</th>
                             <th>Exam Name</th>
-                            <th>Booklet Code</th>
-                            <th>Timestamp (UTC)</th>
-                            <th>Timestamp (Local)</th>
+                            <th>Booklets Used</th>
+                            <th>First Scan (UTC)</th>
+                            <th>Last Scan (UTC)</th>
+                            <th>First Scan (Local)</th>
+                            <th>Last Scan (Local)</th>
                         </tr>
                     </thead>
                     <tbody>
+                        {% set grouped_students = {} %}
                         {% for record in scan_records.items %}
+                            {% set key = record.student_identifier + '|' + record.exam_name %}
+                            {% if key not in grouped_students %}
+                                {% set _ = grouped_students.__setitem__(key, {
+                                    'student_name': record.student_name,
+                                    'student_identifier': record.student_identifier,
+                                    'exam_name': record.exam_name,
+                                    'booklet_codes': [record.booklet_code],
+                                    'timestamps': [record.timestamp]
+                                }) %}
+                            {% else %}
+                                {% set _ = grouped_students[key]['booklet_codes'].append(record.booklet_code) %}
+                                {% set _ = grouped_students[key]['timestamps'].append(record.timestamp) %}
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% for key, student_data in grouped_students.items() %}
+                        {% set first_scan = student_data.timestamps|min %}
+                        {% set last_scan = student_data.timestamps|max %}
+                        {% set unique_booklets = student_data.booklet_codes|unique|list %}
                         <tr>
-                            <td>{{ (scan_records.page - 1) * scan_records.per_page + loop.index }}</td> {# Global record number #}
-                            <td>{{ record.student_name }}</td>
-                            <td>{{ record.student_identifier }}</td>
-                            <td>{{ record.exam_name }}</td>
-                            <td>{{ record.booklet_code }}</td>
-                            <td>{{ record.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <td>{{ loop.index }}</td>
+                            <td>{{ student_data.student_name }}</td>
+                            <td>{{ student_data.student_identifier }}</td>
+                            <td>{{ student_data.exam_name }}</td>
+                            <td>
+                                <span class="badge badge-primary">{{ unique_booklets|length }}</span>
+                                <small class="text-muted d-block">
+                                    Codes: {{ unique_booklets|join(', ') }}
+                                </small>
+                            </td>
+                            <td>{{ first_scan.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <td>{{ last_scan.strftime('%Y-%m-%d %H:%M:%S') }}</td>
                             {# Convert UTC to local time using JavaScript for client-side display #}
-                            <td data-utc-timestamp="{{ record.timestamp.isoformat() }}">
-                                <script>
-                                    (function() {
-                                        var elements = document.querySelectorAll('td[data-utc-timestamp="{{ record.timestamp.isoformat() }}"]');
-                                        elements.forEach(function(element) {
-                                            if (!element.getAttribute('data-converted')) {
-                                                var utcDate = new Date(element.getAttribute('data-utc-timestamp'));
-                                                element.textContent = utcDate.toLocaleString();
-                                                element.setAttribute('data-converted', 'true');
-                                            }
-                                        });
-                                    })();
-                                </script>
+                            <td data-utc-timestamp="{{ first_scan.isoformat() }}" class="local-time">
+                                Loading...
+                            </td>
+                            <td data-utc-timestamp="{{ last_scan.isoformat() }}" class="local-time">
+                                Loading...
                             </td>
                         </tr>
                         {% endfor %}
@@ -97,4 +117,19 @@
     </p>
     {% endif %}
 </div>
+
+{# Enhanced JavaScript for better local time conversion #}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Convert all UTC timestamps to local time
+        var timestampElements = document.querySelectorAll('td[data-utc-timestamp]');
+        timestampElements.forEach(function(element) {
+            if (!element.getAttribute('data-converted')) {
+                var utcDate = new Date(element.getAttribute('data-utc-timestamp'));
+                element.textContent = utcDate.toLocaleString();
+                element.setAttribute('data-converted', 'true');
+            }
+        });
+    });
+</script>
 {% endblock %}

@@ -26,6 +26,43 @@
         .list-group-item-action:hover {
             background-color: #e9ecef; /* Light grey, adjust to theme */
         }
+        
+        /* Auto-hide notification styles */
+        .alert-auto-hide {
+            position: relative;
+            transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+        }
+        
+        .alert-auto-hide.fade-out {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        
+        /* Progress bar for notification timer */
+        .alert-progress {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 3px;
+            background-color: rgba(0, 0, 0, 0.2);
+            transition: width linear;
+        }
+        
+        .alert-success .alert-progress {
+            background-color: rgba(25, 135, 84, 0.6);
+        }
+        
+        .alert-info .alert-progress {
+            background-color: rgba(13, 202, 240, 0.6);
+        }
+        
+        .alert-warning .alert-progress {
+            background-color: rgba(255, 193, 7, 0.6);
+        }
+        
+        .alert-danger .alert-progress {
+            background-color: rgba(220, 53, 69, 0.6);
+        }
     </style>
   </head>
   <body>
@@ -64,15 +101,128 @@
         {# Removed redundant logged-in as message, it's on the logout button now #}
       </div>
     </nav>
-
-    {# Main content block for child templates. Flash messages are handled within child templates like scan_interface.html or admin pages #}
+    
+    {# Flash messages container with auto-hide functionality #}
     <div class="container mt-3">
-      {% block app_content %}{% endblock %}
-      {% block content %}{% endblock %} {# Kept for compatibility if any old templates use it directly, prefer app_content #}
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div id="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible alert-auto-hide" role="alert" data-auto-hide="5000">
+                            <div class="alert-progress"></div>
+                            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+        
+        {# Main content block for child templates #}
+        {% block app_content %}{% endblock %}
+        {% block content %}{% endblock %} {# Kept for compatibility if any old templates use it directly, prefer app_content #}
     </div>
 
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.2/dist/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    
+    <script>
+        // Auto-hide notifications functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const alerts = document.querySelectorAll('.alert-auto-hide');
+            
+            alerts.forEach(function(alert) {
+                const autoHideTime = parseInt(alert.dataset.autoHide) || 5000; // Default 5 seconds
+                const progressBar = alert.querySelector('.alert-progress');
+                
+                // Start progress bar animation
+                if (progressBar) {
+                    progressBar.style.width = '100%';
+                    progressBar.style.transitionDuration = autoHideTime + 'ms';
+                    
+                    // Trigger animation
+                    setTimeout(() => {
+                        progressBar.style.width = '0%';
+                    }, 100);
+                }
+                
+                // Auto-hide timer
+                const hideTimer = setTimeout(function() {
+                    hideAlert(alert);
+                }, autoHideTime);
+                
+                // Pause timer on hover
+                alert.addEventListener('mouseenter', function() {
+                    clearTimeout(hideTimer);
+                    if (progressBar) {
+                        progressBar.style.animationPlayState = 'paused';
+                    }
+                });
+                
+                // Resume timer on mouse leave (optional - you can remove this if you want)
+                alert.addEventListener('mouseleave', function() {
+                    const remainingTime = autoHideTime * 0.3; // Give some remaining time
+                    setTimeout(function() {
+                        hideAlert(alert);
+                    }, remainingTime);
+                });
+            });
+            
+            function hideAlert(alert) {
+                alert.classList.add('fade-out');
+                setTimeout(function() {
+                    alert.remove();
+                }, 500); // Match the CSS transition duration
+            }
+        });
+        
+        // Optional: Add a function to create dynamic notifications
+        function showNotification(message, type = 'info', duration = 5000) {
+            const flashContainer = document.getElementById('flash-messages') || createFlashContainer();
+            
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible alert-auto-hide`;
+            alertDiv.setAttribute('role', 'alert');
+            alertDiv.setAttribute('data-auto-hide', duration);
+            
+            alertDiv.innerHTML = `
+                <div class="alert-progress"></div>
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                ${message}
+            `;
+            
+            flashContainer.appendChild(alertDiv);
+            
+            // Apply auto-hide functionality to the new alert
+            const progressBar = alertDiv.querySelector('.alert-progress');
+            if (progressBar) {
+                progressBar.style.width = '100%';
+                progressBar.style.transitionDuration = duration + 'ms';
+                setTimeout(() => {
+                    progressBar.style.width = '0%';
+                }, 100);
+            }
+            
+            setTimeout(function() {
+                alertDiv.classList.add('fade-out');
+                setTimeout(function() {
+                    alertDiv.remove();
+                }, 500);
+            }, duration);
+        }
+        
+        function createFlashContainer() {
+            const container = document.querySelector('.container.mt-3');
+            const flashDiv = document.createElement('div');
+            flashDiv.id = 'flash-messages';
+            container.insertBefore(flashDiv, container.firstChild);
+            return flashDiv;
+        }
+    </script>
   </body>
 </html>

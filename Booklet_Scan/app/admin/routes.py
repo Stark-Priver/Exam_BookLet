@@ -2,7 +2,7 @@ from flask import render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 from app import db
 from app.admin import bp
-from app.models import Student, Venue, Exam, StudentExamAssignment, Course
+from app.models import Student, Venue, Exam, StudentExamAssignment, Course ,ScanRecord
 from app.admin.forms import StudentForm, VenueForm, ExamForm, StudentExamAssignmentForm, CourseForm
 from app.utils import lcd_display # For controlling the LCD
 

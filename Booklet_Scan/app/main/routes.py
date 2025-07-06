@@ -5,6 +5,8 @@ from app.main import bp
 from app.main.forms import ScanForm
 from app.models import Exam, Student, ScanRecord, StudentExamAssignment
 from app.utils import lcd_display # Import the LCD utility
+from wtforms.validators import DataRequired ,Optional
+
 
 @bp.route('/')
 @bp.route('/index')
