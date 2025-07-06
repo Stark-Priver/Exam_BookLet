@@ -22,31 +22,39 @@
                             <th>Student ID</th>
                             <th>Exam Name</th>
                             <th>Booklet Code</th>
+                            <th>Total Booklets by Student</th>
                             <th>Timestamp (UTC)</th>
                             <th>Timestamp (Local)</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for record in scan_records.items %}
+                        {% for record in scan_records.items %} {# record is now a ScanRecord object #}
                         <tr>
                             <td>{{ (scan_records.page - 1) * scan_records.per_page + loop.index }}</td> {# Global record number #}
-                            <td>{{ record.student_name }}</td>
-                            <td>{{ record.student_identifier }}</td>
-                            <td>{{ record.exam_name }}</td>
+                            <td>{{ record.student.name if record.student else 'N/A' }}</td>
+                            <td>{{ record.student.student_id if record.student else 'N/A' }}</td>
+                            <td>{{ record.exam.name if record.exam else 'N/A' }}</td>
                             <td>{{ record.booklet_code }}</td>
+                            <td>
+                                {% if record.student %}
+                                    {{ record.student.scans.count() }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </td>
                             <td>{{ record.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
                             {# Convert UTC to local time using JavaScript for client-side display #}
                             <td data-utc-timestamp="{{ record.timestamp.isoformat() }}">
                                 <script>
                                     (function() {
-                                        var elements = document.querySelectorAll('td[data-utc-timestamp="{{ record.timestamp.isoformat() }}"]');
-                                        elements.forEach(function(element) {
-                                            if (!element.getAttribute('data-converted')) {
-                                                var utcDate = new Date(element.getAttribute('data-utc-timestamp'));
-                                                element.textContent = utcDate.toLocaleString();
-                                                element.setAttribute('data-converted', 'true');
-                                            }
-                                        });
+                                        // Ensure script targets unique element for each record
+                                        var currentScript = document.currentScript;
+                                        var parentTd = currentScript.closest('td[data-utc-timestamp]');
+                                        if (parentTd && !parentTd.getAttribute('data-converted')) {
+                                            var utcDate = new Date(parentTd.getAttribute('data-utc-timestamp'));
+                                            parentTd.textContent = utcDate.toLocaleString();
+                                            parentTd.setAttribute('data-converted', 'true');
+                                        }
                                     })();
                                 </script>
                             </td>

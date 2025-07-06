@@ -65,8 +65,22 @@
       </div>
     </nav>
 
-    {# Main content block for child templates. Flash messages are handled within child templates like scan_interface.html or admin pages #}
     <div class="container mt-3">
+      {# Flash messages section #}
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category if category != 'message' else 'info' }} alert-dismissible fade show" role="alert">
+              {{ message }}
+              <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+              </button>
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+      {# End Flash messages section #}
+
       {% block app_content %}{% endblock %}
       {% block content %}{% endblock %} {# Kept for compatibility if any old templates use it directly, prefer app_content #}
     </div>
@@ -74,5 +88,19 @@
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.2/dist/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+      $(document).ready(function() {
+        // Auto-dismiss alerts after 1.5 seconds
+        // Exclude alerts with the 'no-auto-dismiss' class if you want some to persist
+        $('.alert').not('.no-auto-dismiss').each(function() {
+          var alert = $(this);
+          setTimeout(function() {
+            alert.fadeOut('slow', function() {
+              $(this).remove(); // Removes the element from DOM after fade out
+            });
+          }, 1500); // 1500 milliseconds = 1.5 seconds
+        });
+      });
+    </script>
   </body>
 </html>

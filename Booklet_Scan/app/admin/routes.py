@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from flask import current_app
 from app import db
 from app.admin import bp
-from app.models import Student, Venue, Exam, StudentExamAssignment, Course
+from app.models import Student, Venue, Exam, StudentExamAssignment, Course, ScanRecord
 from app.admin.forms import StudentForm, VenueForm, ExamForm, StudentExamAssignmentForm, CourseForm
 from app.utils import lcd_display # For controlling the LCD
 from app.utils.status_utils import write_scan_status, clear_scan_status, initialize_scan_status_file # Import from new location
@@ -403,25 +403,37 @@ def delete_assignment(id):
     return redirect(url_for('admin.list_assignments'))
 
 # --- Scan Records Viewing ---
+from sqlalchemy.orm import aliased
+
 @bp.route('/scan_records')
 @login_required
 def list_scan_records():
     page = request.args.get('page', 1, type=int)
-    # Query ScanRecord, joining with Student and Exam to get their names
-    # Order by timestamp descending to show newest scans first
-    scan_records = ScanRecord.query.join(Student, ScanRecord.student_id == Student.id)\
-                                  .join(Exam, ScanRecord.exam_id == Exam.id)\
-                                  .add_columns(
-                                      ScanRecord.id,
-                                      Student.name.label('student_name'),
-                                      Student.student_id.label('student_identifier'),
-                                      Exam.name.label('exam_name'),
-                                      ScanRecord.booklet_code,
-                                      ScanRecord.timestamp
-                                  )\
-                                  .order_by(ScanRecord.timestamp.desc())\
-                                  .paginate(page=page, per_page=15) # Show 15 records per page
+
+    # Aliases for clarity in the join
+    # StudentAlias = aliased(Student) # No longer needed if we query ScanRecord directly and use relationships
+    # ExamAlias = aliased(Exam) # No longer needed
+
+    # Querying ScanRecord objects directly will allow access to relationships
+    # like scan_record.student and scan_record.exam
+    # We will use joinedload to eager load related student and exam objects
+    # to avoid N+1 queries in the template.
+    from sqlalchemy.orm import joinedload
+    scan_records_query = ScanRecord.query\
+        .options(joinedload(ScanRecord.student), joinedload(ScanRecord.exam).joinedload(Exam.venue))\
+        .order_by(ScanRecord.timestamp.desc())
+
+    scan_records_pagination = scan_records_query.paginate(page=page, per_page=15)
+
+    # The items in scan_records_pagination.items will be ScanRecord objects
+    # In the template, we can access:
+    # record.student.name
+    # record.student.student_id
+    # record.student.scans.count()  <-- This will give total scans for that student
+    # record.exam.name
+    # record.booklet_code
+    # record.timestamp
 
     return render_template('admin/scan_records_list.html',
-                           scan_records=scan_records,
+                           scan_records=scan_records_pagination, # Pass the pagination object
                            title='View Scan Records')
