@@ -45,7 +45,7 @@
                                     <input type="text" readonly class="form-control-plaintext" value="{{ student_info.student_id }}">
                                     {{ form.student_identifier(class="form-control d-none", value=student_info.student_id) }} {# Hidden but submitted #}
                                 {% else %}
-                                    {{ form.student_identifier(class="form-control" + (" is-invalid" if form.student_identifier.errors else ""), autofocus=true, placeholder="Scan or type Student ID") }}
+                                    {{ form.student_identifier(class="form-control" + (" is-invalid" if form.student_identifier.errors else ""), autofocus=true, placeholder="Scan or type Student ID", value="") }}
                                 {% endif %}
                                 {% if form.student_identifier.errors and not (scan_step == 'scan_booklet' and student_info) %}
                                     <div class="invalid-feedback">
@@ -60,7 +60,7 @@
                             <div class="form-group row mb-3">
                                 <label for="booklet_code" class="col-sm-3 col-form-label text-right">Booklet Code:</label>
                                 <div class="col-sm-9">
-                                    {{ form.booklet_code(class="form-control" + (" is-invalid" if form.booklet_code.errors else ""), autofocus=true, placeholder="Scan or type Booklet Code") }}
+                                    {{ form.booklet_code(class="form-control" + (" is-invalid" if form.booklet_code.errors else ""), autofocus=true, placeholder="Scan or type Booklet Code", value="") }}
                                     {% if form.booklet_code.errors %}
                                         <div class="invalid-feedback">
                                             {% for error in form.booklet_code.errors %}<span>{{ error }}</span>{% endfor %}
@@ -131,19 +131,83 @@ document.addEventListener('DOMContentLoaded', function () {
     const scanStep = "{{ scan_step }}";
     const studentIdentifierInput = document.getElementById('student_identifier');
     const bookletCodeInput = document.getElementById('booklet_code');
-    const examIdInput = document.getElementById('exam_id'); // Assuming this is the ID of the select element
+    const examIdInput = document.getElementById('exam_id');
 
+    // Force clear fields on page load if there were errors
+    setTimeout(() => {
+        const hasStudentErrors = {% if form.student_identifier.errors %}true{% else %}false{% endif %};
+        const hasBookletErrors = {% if form.booklet_code.errors %}true{% else %}false{% endif %};
+        
+        if (hasStudentErrors && studentIdentifierInput && !studentIdentifierInput.readOnly) {
+            studentIdentifierInput.value = '';
+            studentIdentifierInput.focus();
+            console.log('Cleared student ID field due to validation errors');
+        }
+        
+        if (hasBookletErrors && bookletCodeInput && !bookletCodeInput.readOnly) {
+            bookletCodeInput.value = '';
+            bookletCodeInput.focus();
+            console.log('Cleared booklet code field due to validation errors');
+        }
+    }, 50);
+
+    // Clear and focus fields based on scan step and errors
     if (scanStep === 'check_student') {
         if (studentIdentifierInput) {
-            studentIdentifierInput.focus();
-        } else if (examIdInput) { // If student ID field isn't there (e.g. no exams)
+            // Always clear student ID field if there are errors (incorrect student ID)
+            {% if form.student_identifier.errors %}
+                setTimeout(() => {
+                    studentIdentifierInput.value = '';
+                    studentIdentifierInput.focus();
+                    showScanNotification('Student ID incorrect. Please scan again.', 'error', 3000);
+                }, 100);
+            {% else %}
+                studentIdentifierInput.focus();
+            {% endif %}
+        } else if (examIdInput) {
             examIdInput.focus();
         }
     } else if (scanStep === 'scan_booklet') {
         if (bookletCodeInput) {
-            bookletCodeInput.focus();
-            bookletCodeInput.value = ''; // Ensure booklet field is clear for new scan
+            // Always clear booklet field for new scan
+            setTimeout(() => {
+                bookletCodeInput.value = '';
+                bookletCodeInput.focus();
+                
+                // Show error notification if there are booklet code errors
+                {% if form.booklet_code.errors %}
+                    showScanNotification('Booklet code incorrect. Please scan again.', 'error', 3000);
+                {% endif %}
+            }, 100);
         }
+    }
+
+    // Auto-clear fields on specific error conditions
+    function clearFieldOnError(field, errorCondition) {
+        if (field && errorCondition) {
+            field.value = '';
+            field.focus();
+            // Add visual feedback
+            field.classList.add('field-error-clear');
+            setTimeout(() => {
+                field.classList.remove('field-error-clear');
+            }, 2000);
+        }
+    }
+
+    // Handle form submission errors - clear fields for next attempt
+    const form = document.getElementById('scanForm');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            // This will be handled by the server response, but we can prepare for clearing
+            const currentStep = scanStep;
+            const hasErrors = document.querySelectorAll('.is-invalid').length > 0;
+            
+            if (hasErrors) {
+                // Will be handled by the server response and page reload
+                console.log('Form has errors, fields will be cleared on reload');
+            }
+        });
     }
 
     // Auto-hide functionality for last scan info
@@ -152,21 +216,15 @@ document.addEventListener('DOMContentLoaded', function () {
         const autoHideTime = parseInt(lastScanInfo.dataset.autoHide) || 1000;
         const progressBar = lastScanInfo.querySelector('.alert-progress');
         
-        // Start progress bar animation
         if (progressBar) {
             progressBar.style.width = '100%';
             progressBar.style.transitionDuration = autoHideTime + 'ms';
             
-            // Trigger animation
             setTimeout(() => {
                 progressBar.style.width = '0%';
             }, 100);
         }
         
-        // Auto-hide timer is now handled by redirect script above
-        // The redirect will happen before the auto-hide would trigger
-        
-        // Pause timer on hover (pause redirect)
         let redirectPaused = false;
         lastScanInfo.addEventListener('mouseenter', function() {
             redirectPaused = true;
@@ -175,32 +233,40 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
         
-        // Resume timer on mouse leave
         lastScanInfo.addEventListener('mouseleave', function() {
             redirectPaused = false;
-            // Note: The redirect countdown continues regardless of hover state
-            // If you want to pause the redirect on hover, you'll need to modify the redirect script above
         });
     }
 
-    // Autofocus logic for student_identifier or booklet_code based on scan_step
-    // The autofocus HTML attribute on the relevant field should handle the initial focus.
-    // This script can handle focus after form submissions/re-renders if needed.
-
-    // Clear relevant fields for next input based on step, especially after successful operations
-    // This is now largely handled by redirects to specific states or by the route logic clearing form data.
-    // Example: after successful booklet scan, route redirects to 'check_student', effectively clearing for next student.
-    // After successful student check, route re-renders with booklet_code empty and focused.
-
-    // If student_info is available (meaning student was verified), perhaps make student_identifier readonly
-    {% if student_info and scan_step == 'scan_booklet' %}
-        if (studentIdentifierInput && !studentIdentifierInput.classList.contains('d-none')) { // Check if it's the visible input
-            // studentIdentifierInput.readOnly = true; // This was done by making it form-control-plaintext
+    // Add keyboard shortcuts for quick scanning
+    document.addEventListener('keydown', function(e) {
+        // Escape key clears current field and refocuses
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            if (scanStep === 'check_student' && studentIdentifierInput) {
+                studentIdentifierInput.value = '';
+                studentIdentifierInput.focus();
+                showScanNotification('Student ID field cleared', 'info', 2000);
+            } else if (scanStep === 'scan_booklet' && bookletCodeInput) {
+                bookletCodeInput.value = '';
+                bookletCodeInput.focus();
+                showScanNotification('Booklet code field cleared', 'info', 2000);
+            }
         }
-        if (examIdInput && !examIdInput.classList.contains('d-none')) {
-            // examIdInput.disabled = true; // This was done by making it form-control-plaintext
-        }
-    {% endif %}
+    });
+
+    // Auto-select text when field is focused (for easier overwriting)
+    if (studentIdentifierInput) {
+        studentIdentifierInput.addEventListener('focus', function() {
+            this.select();
+        });
+    }
+    
+    if (bookletCodeInput) {
+        bookletCodeInput.addEventListener('focus', function() {
+            this.select();
+        });
+    }
 });
 
 // Function to manually hide the last scan info
@@ -218,7 +284,6 @@ function hideLastScanInfo() {
 
 // Enhanced notification system for dynamic messages
 function showScanNotification(message, type = 'success', duration = 5000) {
-    // Create notification container if it doesn't exist
     let notificationContainer = document.getElementById('scan-notifications');
     if (!notificationContainer) {
         notificationContainer = document.createElement('div');
@@ -231,7 +296,6 @@ function showScanNotification(message, type = 'success', duration = 5000) {
         document.body.appendChild(notificationContainer);
     }
     
-    // Create notification element
     const notification = document.createElement('div');
     notification.className = `alert alert-${type} alert-dismissible alert-auto-hide shadow-lg mb-2`;
     notification.setAttribute('role', 'alert');
@@ -250,13 +314,11 @@ function showScanNotification(message, type = 'success', duration = 5000) {
     
     notificationContainer.appendChild(notification);
     
-    // Trigger slide-in animation
     setTimeout(() => {
         notification.style.opacity = '1';
         notification.style.transform = 'translateX(0)';
     }, 100);
     
-    // Progress bar animation
     const progressBar = notification.querySelector('.alert-progress');
     if (progressBar) {
         progressBar.style.width = '100%';
@@ -266,7 +328,6 @@ function showScanNotification(message, type = 'success', duration = 5000) {
         }, 200);
     }
     
-    // Auto-hide
     setTimeout(() => {
         notification.style.opacity = '0';
         notification.style.transform = 'translateX(100%)';
@@ -278,10 +339,61 @@ function showScanNotification(message, type = 'success', duration = 5000) {
     }, duration);
 }
 
-// Example usage for scan operations
-// You can call these functions from your Flask routes or other JavaScript events
-// showScanNotification('Student verified successfully!', 'success');
-// showScanNotification('Booklet scan completed!', 'success', 3000);
-// showScanNotification('Student not found in exam registry.', 'error');
+// Function to clear field and show notification
+function clearFieldAndNotify(fieldId, message) {
+    const field = document.getElementById(fieldId);
+    if (field) {
+        field.value = '';
+        field.focus();
+        showScanNotification(message, 'info', 2000);
+    }
+}
+
+// Functions for manual field clearing (can be called from backend or other JS)
+function clearStudentIdField() {
+    clearFieldAndNotify('student_identifier', 'Student ID field cleared for next scan');
+}
+
+function clearBookletCodeField() {
+    clearFieldAndNotify('booklet_code', 'Booklet code field cleared for next scan');
+}
 </script>
+
+<style>
+/* Add visual feedback for field clearing */
+.field-error-clear {
+    animation: errorClear 0.5s ease-out;
+}
+
+@keyframes errorClear {
+    0% { background-color: #f8d7da; }
+    100% { background-color: transparent; }
+}
+
+/* Progress bar for notifications */
+.alert-progress {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 4px;
+    background-color: rgba(0, 0, 0, 0.2);
+    transition: width linear;
+}
+
+.alert-auto-hide {
+    position: relative;
+    overflow: hidden;
+}
+
+/* Improved focus styles for better UX */
+.form-control:focus {
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    border-color: #80bdff;
+}
+
+.is-invalid.form-control:focus {
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+    border-color: #dc3545;
+}
+</style>
 {% endblock %}
