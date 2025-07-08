@@ -16,15 +16,16 @@ The system aims to improve efficiency and accuracy in tracking exam booklet subm
     *   **Venues:** CRUD operations for examination venues (Name, Location, Capacity).
     *   **Exams:** CRUD operations for exams (Name, Course, Venue, Date, Start/End Times).
     *   **Student-Exam Assignments:** Assign students to specific exams and manage these assignments.
-*   **Booklet Scanning:**
-    *   User-friendly interface to select an active exam.
-    *   Input for booklet code and student identifier (supports manual typing and USB barcode scanners).
+*   **Booklet Scanning & On-Demand Printing (New):**
+    *   User-friendly interface to select an active exam and input student identifier.
+    *   **Automatic Booklet Generation & Printing:** If a student is confirmed eligible for the selected exam:
+        *   A new PDF booklet with a unique barcode is generated.
+        *   The generated PDF is automatically sent to a connected printer (requires printer setup on the Raspberry Pi).
+        *   The new booklet's barcode is recorded against the student for the exam.
     *   Validation:
-        *   Checks for valid student ID.
-        *   Warns if a student is not formally assigned to the selected exam (but allows scan).
-        *   Prevents duplicate booklet code scans for the same exam.
-    *   Real-time feedback on scan success or failure.
-    *   Display of last successfully scanned item details.
+        *   Checks for valid student ID and eligibility for the exam.
+        *   Prevents duplicate booklet code recordings for the same exam.
+    *   Real-time feedback on eligibility, PDF generation, printing status, and recording success/failure, shown on both the web UI and I2C LCD (if connected).
 *   **Modern User Interface:**
     *   Clean, responsive design using the "Minty" Bootswatch theme.
     *   Card-based layouts for dashboards and forms.
@@ -142,15 +143,18 @@ The system aims to improve efficiency and accuracy in tracking exam booklet subm
 
 4.  **Booklet Scanning Interface:**
     *   Access the scanning interface via the "Scan Booklets" link in the top navigation bar or the large green button on the Admin Dashboard.
-    *   **Select the Exam:** Choose the current exam from the "Select Exam" dropdown list. This is crucial for associating scans correctly.
-    *   **Enter Student ID:** Type the Student's ID or scan it if it's barcoded/QR coded.
-    *   **Enter Booklet Code:** Type the Booklet Code or scan it from the exam booklet.
-    *   **Submit:** Click the "Record Scan" button. If your USB scanner is configured to send an "Enter" key press after scanning, it should automatically submit the form data for the focused field (typically the booklet code field).
-    *   The system will provide immediate feedback:
-        *   **Success:** A green message confirming the scan, and the "Last Scan Details" section will update.
-        *   **Warning:** Yellow messages for issues like "Student not assigned to this exam" or "Booklet already scanned."
-        *   **Error:** Red messages for critical issues like "Student ID not found."
-    *   After a successful scan, the Student ID and Booklet Code fields will clear, and the cursor will return to the Booklet Code field, ready for the next scan.
+    *   **Select the Exam:** Choose the current exam from the "Select Exam" dropdown list.
+    *   **Enter Student ID:** Type the Student's ID or scan it if it's barcoded/QR coded and press Enter or click "Check Student & Print Booklet".
+    *   **Automatic Processing:** If the student is eligible:
+        *   The system will automatically generate a new booklet PDF with a unique barcode.
+        *   This PDF will be sent to the configured printer.
+        *   The booklet's information (barcode, student, exam) will be recorded in the database.
+    *   **Feedback:** The system provides immediate feedback on the web page and on the LCD (if connected) regarding:
+        *   Student eligibility.
+        *   Booklet generation status.
+        *   Printing status (success/failure).
+        *   Record saving status.
+    *   After successful printing and recording, the interface will reset for the next student, typically keeping the selected exam.
 
 ## Future Considerations/Improvements
 
@@ -196,12 +200,23 @@ This application can be run on a Raspberry Pi with an I2C LCD display to show sc
     *   Update package lists: `sudo apt update && sudo apt upgrade -y`
     *   Install necessary tools and libraries:
         ```bash
-        sudo apt install -y python3-dev python3-pip i2c-tools libffi-dev git
+        sudo apt install -y python3-dev python3-pip i2c-tools libffi-dev git cups cups-client
         ```
         *   `i2c-tools`: Allows you to detect I2C devices.
         *   `libffi-dev`: May be needed for `cffi`, a dependency of `smbus-cffi`.
+        *   `cups` & `cups-client`: Common UNIX Printing System, for managing printers.
 
-5.  **Verify I2C Connection:**
+5.  **Configure Printer (CUPS):**
+    *   Ensure your printer is connected to the Raspberry Pi (USB or network) and powered on.
+    *   Install printer drivers if necessary. Many printers are supported out-of-the-box or have drivers available through `apt`.
+    *   Add the printer to CUPS:
+        *   Open a web browser on a device connected to the same network as your Raspberry Pi and navigate to `http://<RaspberryPi_IP_Address>:631`. (You might need to enable remote access to CUPS first: `sudo cupsctl --remote-any` and `sudo /etc/init.d/cups restart` or `sudo systemctl restart cups`).
+        *   Go to "Administration" -> "Add Printer". You may be prompted for a username/password (use your Pi's user credentials, e.g., `pi` and your password. The user `pi` might need to be added to the `lpadmin` group: `sudo usermod -a -G lpadmin pi`).
+        *   Follow the on-screen instructions to add your printer. Note the printer's "Queue Name" as this will be its identifier.
+    *   You can set the printer as the default printer in CUPS or specify its name in the application's configuration if needed (though the current script uses the default or a name passed to `print_pdf`).
+    *   Test printing a test page from the CUPS interface to ensure it's working.
+
+6.  **Verify I2C Connection:**
     *   With the LCD wired up and Pi powered on, run:
         ```bash
         sudo i2cdetect -y 1
@@ -248,6 +263,9 @@ This application can be run on a Raspberry Pi with an I2C LCD display to show sc
 *   The scan route (`app/main/routes.py`) will send status messages to the LCD:
     *   "System Ready" on initialization.
     *   "Error: No Exams Setup" if no exams are configured.
-    *   Scan results: Student ID, eligibility ("Eligible" or "Warn:NotAssigned"), or error messages like "Student Not Found", "Warn: Duplicate".
-    *   Form validation errors from the web page may also show a concise message.
+    *   Eligibility status (e.g., "Student Eligible", "Not Eligible").
+    *   Booklet generation status (e.g., "Generating PDF...", "PDF Gen Failed").
+    *   Printing status (e.g., "Printing...", "Print Failed", "Printed OK").
+    *   Recording status (e.g., "Saving...", "Save Failed", "Saved OK").
+    *   Error messages like "Student Not Found", "Exam Not Found".
 ```

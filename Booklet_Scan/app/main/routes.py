@@ -5,7 +5,11 @@ from app.main import bp
 from app.main.forms import ScanForm
 from app.models import Exam, Student, ScanRecord, StudentExamAssignment
 from app.utils import lcd_display # Import the LCD utility
+from app.utils.booklet_generator import generate_single_booklet
+from app.utils.printer_utils import print_pdf
 from wtforms.validators import DataRequired ,Optional
+import datetime
+import os # For joining paths for booklet output
 
 
 @bp.route('/')
@@ -52,27 +56,98 @@ def scan_ui():
                 elif not student:
                     flash(f'Student ID "{student_identifier}" not found.', 'danger')
                     lcd_display.display_message(f"Stud ID:{student_identifier[:8]}", "Not Found", delay_after=3)
+                    # No change in scan_step or verified_student_info, stay on check_student
                 else:
                     assignment = StudentExamAssignment.query.filter_by(student_id=student.id, exam_id=exam.id).first()
                     if not assignment:
                         flash(f'Student {student.name} ({student.student_id}) is NOT ELIGIBLE for exam {exam.name} (not assigned).', 'danger')
                         lcd_display.display_message(f"{student.name[:16]}", "NOT ELIGIBLE", delay_after=3)
-                        # Stay in 'check_student' step, clear student_identifier for next attempt
-                        form.student_identifier.data = ""
+                        form.student_identifier.data = "" # Clear student ID for next attempt
+                        # No change in scan_step or verified_student_info, stay on check_student
                     else:
-                        # Student is eligible
-                        flash(f'Student {student.name} ({student.student_id}) is ELIGIBLE for {exam.name}. Please scan booklet.', 'success')
-                        lcd_display.display_message(f"{student.name[:16]}", "ELIGIBLE: Scan_BK", delay_after=2)
-                        scan_step = 'scan_booklet'
-                        # Pass student info to the next part of the form/view
-                        # The form fields for exam and student will be pre-filled and possibly readonly
-                        # The actual IDs will be used for booklet submission.
-                        verified_student_info = {'id': student.id, 'name': student.name, 'student_id': student.student_id, 'exam_id': exam.id, 'exam_name': exam.name}
-                        form.booklet_code.data = "" # Clear booklet code for input
-                # Re-render with current form data, messages, and new scan_step/student_info
-                return render_template('main/scan_interface.html', title='Scan Booklets', form=form, scan_step=scan_step, student_info=verified_student_info)
-            else: # Validation failed for check_student step
+                        # Student is eligible - Proceed to generate, print, and record booklet
+                        flash(f'Student {student.name} ({student.student_id}) is ELIGIBLE for {exam.name}. Printing booklet...', 'info')
+                        lcd_display.display_message(f"{student.name[:8]} ELIGIBLE", "Printing...", delay_after=1)
+
+                        # 1. Generate unique ID for the booklet
+                        # Using a combination of student ID, exam ID, and timestamp for uniqueness
+                        timestamp_str = datetime.datetime.now().strftime("%Y%m%d%H%M%S%f")
+                        unique_booklet_id = f"S{student.id}E{exam.id}T{timestamp_str}"
+
+                        # Define output directory for booklets relative to app instance path or a configured static path
+                        # For simplicity, using 'output_barcodes' in the instance path or project root.
+                        # Using os.path.join(current_app.instance_path, 'printed_booklets') might be better for instance-specific files.
+                        # For now, using the existing 'output_barcodes' at project root.
+                        booklet_output_dir = os.path.join(current_app.root_path, '..', 'output_barcodes')
+                        # Ensure this path is correct relative to where `run.py` is.
+                        # If run.py is in Booklet_Scan, then `current_app.root_path` is `Booklet_Scan/app`.
+                        # So `../output_barcodes` would be `Booklet_Scan/output_barcodes`.
+                        # This matches the structure of `booklet_generator.py`'s default.
+
+                        # 2. Generate the booklet PDF
+                        pdf_file_path, barcode_value = generate_single_booklet(
+                            unique_id=unique_booklet_id,
+                            output_folder=booklet_output_dir, # Make sure this path is writable
+                            student_name=student.name,
+                            exam_name=exam.name
+                        )
+
+                        if not pdf_file_path or not barcode_value:
+                            flash('Failed to generate booklet PDF.', 'danger')
+                            lcd_display.display_message("Error:", "PDF Gen Failed", delay_after=3)
+                            # Stay in 'check_student' step, allow retry
+                            form.student_identifier.data = "" # Clear student for next attempt
+                            return render_template('main/scan_interface.html', title='Scan Booklets', form=form, scan_step='check_student', student_info=None)
+
+                        # 3. Print the PDF
+                        # Consider adding printer name from config: current_app.config.get('PRINTER_NAME')
+                        print_success = print_pdf(pdf_file_path, printer_name=current_app.config.get('DEFAULT_PRINTER_NAME'))
+
+                        if not print_success:
+                            flash(f'Booklet generated ({barcode_value}) but FAILED to print. Please check printer. Record not saved.', 'warning')
+                            lcd_display.display_message(f"BK:{barcode_value[:7]} GenOK", "PRINT FAILED", delay_after=3)
+                            # Stay in 'check_student' step, allow retry for the student (perhaps after fixing printer)
+                            # Or, decide if we should record it anyway. For now, we don't.
+                            form.student_identifier.data = student_identifier # Keep student ID for retry
+                            return render_template('main/scan_interface.html', title='Scan Booklets', form=form, scan_step='check_student', student_info=None)
+
+                        flash(f'Booklet {barcode_value} printed successfully for {student.name}. Recording...', 'success')
+                        lcd_display.display_message(f"BK:{barcode_value[:7]} OK", f"{student.name[:8]} Printed", delay_after=2)
+
+                        # 4. Record the scan
+                        # Check for duplicates before saving (though unique ID should prevent this if barcode is unique)
+                        existing_scan = ScanRecord.query.filter_by(exam_id=exam.id, booklet_code=barcode_value).first()
+                        if existing_scan:
+                            # This case should be rare if unique_id generation is robust
+                            flash(f'Error: Booklet "{barcode_value}" already exists for this exam. Printing aborted.', 'danger')
+                            lcd_display.display_message(f"ERR:BK DUPLICATE", f"{barcode_value[:10]}", delay_after=3)
+                            # Reset for next student scan
+                            return redirect(url_for('main.scan_ui', scan_step='check_student', last_exam_id=exam_id))
+
+                        try:
+                            scan_record = ScanRecord(student_id=student.id, exam_id=exam.id, booklet_code=barcode_value)
+                            db.session.add(scan_record)
+                            db.session.commit()
+                            flash(f'Booklet "{barcode_value}" recorded for {student.name} ({exam.name}).', 'success')
+                            lcd_display.display_message(f"BK:{barcode_value[:7]} Saved", f"{student.name[:8]} Done", delay_after=3)
+
+                            # Reset for next student scan, pass last exam_id to pre-select it
+                            return redirect(url_for('main.scan_ui', scan_step='check_student', last_exam_id=exam_id))
+                        except Exception as e:
+                            db.session.rollback()
+                            current_app.logger.error(f"Error saving scan record after printing: {e}")
+                            flash(f'Booklet "{barcode_value}" printed, but failed to save record. Please record manually.', 'danger')
+                            lcd_display.display_message("Error:", "Save Failed", delay_after=3)
+                            # Reset for next student scan
+                            return redirect(url_for('main.scan_ui', scan_step='check_student', last_exam_id=exam_id))
+
+                # If any of the above conditions (no exam, no student, not eligible) led to an error message,
+                # we re-render the template.
+                # The successful print-and-record path redirects.
+                return render_template('main/scan_interface.html', title='Scan Booklets', form=form, scan_step='check_student', student_info=None)
+            else: # Validation failed for check_student step (e.g. exam_id not provided)
                 lcd_display.display_message("Error:", "Check Input", delay_after=3)
+                # scan_step remains 'check_student', verified_student_info is None
 
 
         elif form.submit_record_scan.data:
