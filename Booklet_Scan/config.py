@@ -8,3 +8,6 @@ class Config:
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
         'sqlite:///' + os.path.join(os.path.abspath(os.path.dirname(os.path.dirname(__file__))), 'app.db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+    # Configuration for Booklet Printing
+    DEFAULT_PRINTER_NAME = os.environ.get('DEFAULT_PRINTER_NAME') or None # Or specify a default printer queue name, e.g., "MyPrinter"
